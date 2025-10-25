@@ -3,6 +3,8 @@ import 'package:jersey_premier_league/models/user_model.dart';
 import 'package:http/http.dart' as http; // Official HTTP package for network calls
 import 'dart:convert'; // Required for JSON encoding/decoding
 import 'dart:async';
+// ⚡ ADD: You need to add 'google_sign_in: ^6.1.0' (or latest) to your pubspec.yaml
+import 'package:google_sign_in/google_sign_in.dart';
 
 // --- Configuration ---
 // IMPORTANT: Reverting to 10.0.2.2 as the backend server is running and accessible
@@ -205,5 +207,52 @@ class AuthService {
 
     // Password change is successful (no need to update user object, as token is unchanged)
     // The backend handles the actual password hash update.
+  }
+
+  // ⚡ ACTUAL IMPLEMENTATION: Now uses Google Sign-In and calls the backend
+  Future<User?> signInWithGoogle() async {
+    // ----------------------------------------------------
+    // 1. Initialize Google Sign-In
+    final GoogleSignIn googleSignIn = GoogleSignIn();
+
+    // 2. Perform sign-in and get authentication details
+    final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+
+    if (googleUser == null) {
+      // User cancelled the sign-in process
+      throw Exception('Google Sign-In cancelled by user.');
+    }
+
+    final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+    final String? idToken = googleAuth.idToken;
+
+    if (idToken == null) {
+      throw Exception('Failed to retrieve Google ID Token.');
+    }
+
+    // final String idToken = googleAuth.idToken!; // The token to send to the backend
+    // ----------------------------------------------------
+
+    // ⚠️ Placeholder: You must replace this with the real token retrieval flow above
+    //const String idToken = 'REAL_GOOGLE_ID_TOKEN_PLACEHOLDER';
+
+    try {
+      // 3. Send ID token to your backend via a new endpoint
+      final response = await _post(
+        '/api/auth/google',
+        {
+          'id_token': idToken,
+        },
+      );
+
+      // 4. Backend returns User object + JWT
+      final user = User.fromJson(response);
+      currentUserNotifier.value = user;
+
+      return user;
+    } on Exception catch (e) {
+      debugPrint('Google Sign-In API Error: $e');
+      throw Exception(e.toString().replaceFirst('Exception: ', 'Google Sign-In failed: '));
+    }
   }
 }

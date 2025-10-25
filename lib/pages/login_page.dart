@@ -5,14 +5,13 @@ import 'package:jersey_premier_league/models/user_model.dart';
 typedef SignInCallback = Future<User?> Function(String email, String password);
 typedef GoToRegisterCallback = VoidCallback;
 
-// Define a theme color for consistency (used by other pages too)
-const Color primaryColor = Color(0xFF0D1B2A); // Dark Blue
+// REMOVED: const Color primaryColor = Color(0xFF0D1B2A); // Dark Blue (No longer needed, using theme)
 
 class LoginPage extends StatefulWidget {
   final SignInCallback onSignIn;
-  final Future<User?> Function() onGoogleSignIn; // Now uses the new Guest Login signature
+  final Future<User?> Function() onGoogleSignIn; // Used for Google/mock sign in
   final GoToRegisterCallback onGoToRegister;
-  final bool isLoading; // Not used locally, but kept for main.dart consistency
+  final bool isLoading;
 
   const LoginPage({
     super.key,
@@ -30,7 +29,7 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   String? _errorMessage;
-  bool _localLoading = false; // Separate loading state for the buttons
+  bool _localLoading = false;
 
   // --- Core Login Logic ---
   void _attemptLogin() async {
@@ -55,10 +54,9 @@ class _LoginPageState extends State<LoginPage> {
         _passwordController.text.trim(),
       );
 
-      // IMPORTANT: If 'user' is returned successfully, the AuthService state changes,
-      // and main.dart automatically navigates. We do NOT need to call setState to stop loading.
+      // If 'user' is returned successfully, the AuthService state changes,
+      // and main.dart automatically navigates.
       if (user == null) {
-        // Login failed (AuthService returned null, indicating invalid credentials)
         if (mounted) {
           setState(() {
             _errorMessage = 'Invalid email or password. Please try again.';
@@ -66,7 +64,6 @@ class _LoginPageState extends State<LoginPage> {
           });
         }
       }
-      // If user is NOT null, main.dart's ValueListenableBuilder handles the navigation.
 
       // Optional: Clear fields on success
       _emailController.clear();
@@ -76,17 +73,15 @@ class _LoginPageState extends State<LoginPage> {
       // API or Network Error
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString().contains('Invalid credentials')
-              ? 'Invalid email or password.'
-              : 'Login failed: ${e.toString().replaceAll('Exception: ', '')}';
+          _errorMessage = 'Login failed: ${e.toString().replaceAll('Exception: ', '')}';
           _localLoading = false;
         });
       }
     }
   }
 
-  // --- Guest Login Logic ---
-  void _attemptGuestLogin() async {
+  // ⚡ FIX: Renamed method to _attemptGoogleLogin for clarity
+  void _attemptGoogleLogin() async {
     if (_localLoading) return;
 
     setState(() {
@@ -95,13 +90,22 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      // Assuming onGoogleSignIn is now used for guest sign-in
+      // Calls the new signInWithGoogle (mock) method via the widget callback
       await widget.onGoogleSignIn();
-      // If successful, main.dart navigates, so we stop loading.
+      // If successful (if mock was removed and actual sign-in implemented), main.dart navigates.
+    } on Exception catch (e) {
+      // Display the specific error message from the service
+      if (mounted) {
+        setState(() {
+          // Use the specific message from the AuthService: "Google Sign-In is not yet implemented."
+          _errorMessage = e.toString().replaceFirst('Exception: ', '');
+          _localLoading = false;
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Guest sign-in failed: API not implemented.';
+          _errorMessage = 'An unknown error occurred during Google sign-in.';
           _localLoading = false;
         });
       }
@@ -111,7 +115,6 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    // We use a combined loading state to disable all buttons during any auth attempt
     // Access ambient primary color from the theme
     final themePrimaryColor = Theme.of(context).colorScheme.primary;
 
@@ -209,19 +212,23 @@ class _LoginPageState extends State<LoginPage> {
               const Text('OR', style: TextStyle(color: Colors.black54), textAlign: TextAlign.center),
               const SizedBox(height: 20),
 
-              // Guest Login Button (Mocked)
+              // Google Login Button
               OutlinedButton.icon(
-                onPressed: combinedLoading ? null : _attemptGuestLogin,
-                // Use theme color for icon/text
-                icon: Icon(Icons.person_pin, color: themePrimaryColor),
+                // ⚡ FIX: Use the new _attemptGoogleLogin method
+                onPressed: combinedLoading ? null : _attemptGoogleLogin,
+                // Use a Google-like icon
+                icon: Icon(
+                  Icons.g_mobiledata_outlined,
+                  color: themePrimaryColor,
+                  size: 30,
+                ),
                 label: Text(
-                  'Sign in as Guest',
+                  'Login with Google',
                   style: TextStyle(fontSize: 16, color: themePrimaryColor),
                 ),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 50),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  // Use theme color for border
                   side: BorderSide(color: themePrimaryColor, width: 1.5),
                   backgroundColor: Colors.white,
                 ),
@@ -231,7 +238,8 @@ class _LoginPageState extends State<LoginPage> {
               // Go to Register
               TextButton(
                 onPressed: combinedLoading ? null : widget.onGoToRegister,
-                child: const Text('Don\'t have an account? Register', style: TextStyle(color: primaryColor)),
+                // ⚡ FIX: Use themePrimaryColor instead of hardcoded primaryColor
+                child: Text('Don\'t have an account? Register', style: TextStyle(color: themePrimaryColor)),
               ),
             ],
           ),
