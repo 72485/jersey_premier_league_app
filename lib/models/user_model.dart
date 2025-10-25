@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class User {
-  final String id;
+  final int id;
   final String email;
   final String name;
   final String token; // New: Required for REST API session management
@@ -18,7 +18,7 @@ class User {
   // Factory constructor to create a User from a mock API response Map
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['id'] as String,
+      id: json['id'] as int,
       email: json['email'] as String,
       name: json['name'] as String,
       token: json['token'] as String,

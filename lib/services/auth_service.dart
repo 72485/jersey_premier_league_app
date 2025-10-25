@@ -1,170 +1,209 @@
 import 'package:flutter/foundation.dart';
 import 'package:jersey_premier_league/models/user_model.dart';
-// Note: In a real app, you would import 'package:http/http.dart' as http;
+import 'package:http/http.dart' as http; // Official HTTP package for network calls
+import 'dart:convert'; // Required for JSON encoding/decoding
+import 'dart:async';
 
-/// Mock Backend Data
-/// We use mock data to simulate successful responses from a REST API.
-const _mockUserProfiles = [
-  {
-    'id': 'user123',
-    'name': 'Test User',
-    'email': 'test@user.com',
-    'token': 'mock_jwt_token_12345',
-    'fpl_team_ID': null, // Starts without FPL ID
-  },
-  {
-    'id': 'admin456',
-    'name': 'Admin User',
-    'email': 'admin@user.com',
-    'token': 'mock_jwt_token_45678',
-    'fpl_team_ID': '987654321', // Already has FPL ID
-  },
-];
-
+// --- Configuration ---
+// IMPORTANT: Reverting to 10.0.2.2 as the backend server is running and accessible
+// only via this address on the Android Emulator.
+const String _baseUrl = 'http://192.168.137.1:8080'; // CORRECT ADDRESS FOR ANDROID EMULATOR
+//const String _baseUrl = 'http://localhost:8080'; //chrome test
 class AuthService {
-  // Use ValueNotifier to notify listeners (like AuthGate) of state changes.
   final ValueNotifier<User?> currentUserNotifier = ValueNotifier(null);
 
-  // Private helper to simulate network delay and custom API responses
-  Future<Map<String, dynamic>> _makeApiRequest(
-      String endpoint, Map<String, dynamic> body) async {
-    await Future.delayed(const Duration(milliseconds: 800)); // Simulate latency
+  // Private helper for making authenticated POST requests
+  Future<Map<String, dynamic>> _post(
+      String endpoint, Map<String, dynamic> body, {String? token}) async {
 
-    // --- Mock Login Endpoint ---
-    if (endpoint == '/api/login') {
-      final email = body['email'];
-      final password = body['password'];
+    final url = Uri.parse('$_baseUrl$endpoint'); // Correct URL construction
+    print(url);
+    final headers = {
+      'Content-Type': 'application/json',
+    };
 
-      if (email == 'test@user.com' && password == 'password') {
-        return {'status': 'success', 'user': _mockUserProfiles[0]};
-      }
-      if (email == 'admin@user.com' && password == 'password') {
-        return {'status': 'success', 'user': _mockUserProfiles[1]};
-      }
-      throw Exception('Invalid username or password.');
+    // Add Authorization header if a token is provided (used for updates/protected routes)
+    if (token != null) {
+      headers['Authorization'] = 'Bearer $token';
     }
 
-    // --- Mock Register Endpoint ---
-    if (endpoint == '/api/register') {
-      if (body['email'] == 'exists@user.com') {
-        throw Exception('Email already exists. Please login.');
-      }
-      // Simulate successful registration for a new user
-      return {
-        'status': 'success',
-        'user': {
-          'id': 'newuser${DateTime.now().millisecondsSinceEpoch}',
-          'name': body['name'],
-          'email': body['email'],
-          'token': 'new_user_token_${DateTime.now().millisecond}',
-          'fpl_team_ID': null,
+    try {
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: json.encode(body),
+      ).timeout(const Duration(seconds: 10)); // Uses TimeoutException
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      } else {
+        // Logic to extract specific error message (e.g., "Incorrect current password")
+        String errorMessage = 'An unknown server error occurred.';
+
+        try {
+          final errorBody = json.decode(response.body);
+          if (errorBody.containsKey('error')) {
+            errorMessage = errorBody['error'] as String;
+          } else {
+            errorMessage = 'Request failed with status: ${response.statusCode}';
+          }
+        } catch (e) {
+          errorMessage = 'Request failed with status: ${response.statusCode}. Could not parse error details.';
         }
-      };
-    }
 
-    // --- Mock Update Profile Endpoint ---
-    if (endpoint == '/api/profile/update') {
-      // Check for a valid token/session
-      if (body['token'] != currentUserNotifier.value?.token) {
-        throw Exception('Session expired. Please log in again.');
+        throw Exception(errorMessage);
       }
-      // Simulate successful update
-      return {
-        'status': 'success',
-        'fpl_team_ID': body['fpl_team_ID'],
-      };
-    }
-
-    throw Exception('Unknown API error.');
-  }
-
-  // Retrieves the currently logged-in user object
-  User? get currentUser => currentUserNotifier.value;
-
-  // Sign Up method
-  Future<User?> signUp(String name, String email, String password) async {
-    try {
-      final response = await _makeApiRequest('/api/register', {
-        'name': name,
-        'email': email,
-        'password': password,
-      });
-
-      if (response['status'] == 'success') {
-        final user = User.fromJson(response['user']);
-        currentUserNotifier.value = user; // Update the state
-        return user;
-      }
-    } catch (e) {
-      rethrow; // Re-throw the specific exception from the mock request
-    }
-    return null;
-  }
-
-  // Sign In method
-  Future<User?> signIn(String email, String password) async {
-    try {
-      final response = await _makeApiRequest('/api/login', {
-        'email': email,
-        'password': password,
-      });
-
-      if (response['status'] == 'success') {
-        final user = User.fromJson(response['user']);
-        currentUserNotifier.value = user; // Update the state
-        return user;
-      }
-    } catch (e) {
-      rethrow; // Re-throw the specific exception from the mock request
-    }
-    return null;
-  }
-
-  // Mock Google Sign-In is now a Guest Login, relying on a hardcoded mock user
-  Future<User?> signInAsGuest() async {
-    try {
-      await Future.delayed(const Duration(milliseconds: 800));
-
-      final guestUser = User(
-        id: 'guest_${DateTime.now().millisecondsSinceEpoch}',
-        email: 'guest@jpl.com',
-        name: 'Guest Player',
-        token: 'guest_token_${DateTime.now().millisecond}',
-        fpl_team_ID: null,
-      );
-
-      currentUserNotifier.value = guestUser;
-      return guestUser;
-    } catch (e) {
-      throw Exception('Failed to sign in as guest.');
-    }
-  }
-
-  // Sign Out method
-  Future<void> signOut() async {
-    // In a real app, you would call a /api/logout endpoint here
-    await Future.delayed(const Duration(milliseconds: 200));
-    currentUserNotifier.value = null; // Clear the state
-  }
-
-  // Method to update the FPL ID via API
-  Future<User> updateFplTeamID(User user, String teamId) async {
-    try {
-      final response = await _makeApiRequest('/api/profile/update', {
-        'token': user.token,
-        'fpl_team_ID': teamId,
-      });
-
-      if (response['status'] == 'success') {
-        // Create an updated user object and set it as the new current user
-        final updatedUser = user.copyWith(fpl_team_ID: teamId);
-        currentUserNotifier.value = updatedUser; // Update the state
-        return updatedUser;
-      }
+    } on TimeoutException { // 👈 This will now be recognized
+      throw Exception('Network request timed out. Please check your connection.');
     } catch (e) {
       rethrow;
     }
-    // Fallback in case API returns success but no data (shouldn't happen)
-    throw Exception('Failed to update FPL ID.');
+  }
+
+  // ... (signIn, register, signOut, updateFplTeamID methods are unchanged)
+  Future<User?> signIn(String email, String password) async {
+    try {
+      final response = await _post(
+        '/api/login',
+        {
+          'email': email,
+          'password': password,
+        },
+      );
+
+      final user = User.fromJson(response);
+      currentUserNotifier.value = user;
+
+      return user;
+    } catch (e) {
+      // The error is handled by the LoginPage and displayed as _errorMessage
+      debugPrint('Login Error: $e');
+      return null;
+    }
+  }
+
+  Future<User?> register(String name, String email, String password) async {
+    try {
+      final response = await _post(
+        '/api/register',
+        {
+          'name': name,
+          'email': email,
+          'password': password,
+        },
+      );
+
+      final user = User.fromJson(response);
+      currentUserNotifier.value = user;
+
+      return user;
+    } catch (e) {
+      debugPrint('Registration Error: $e');
+      if (e is Exception && e.toString().contains('409')) {
+        throw Exception('An account with this email already exists.');
+      }
+      throw Exception('Registration failed.');
+    }
+  }
+
+  Future<User?> signInAsGuest() async {
+    throw Exception('Guest login not yet implemented on the real API.');
+  }
+
+  Future<void> signOut() async {
+    currentUserNotifier.value = null;
+  }
+
+  Future<User> updateFplTeamID(User user, String teamId) async {
+    try {
+      final response = await _post(
+        '/api/profile/update',
+        {
+          'fpl_team_ID': teamId,
+          'id': user.id,
+        },
+        token: user.token,
+      );
+
+      if (response.containsKey('fpl_team_ID')) {
+        final updatedUser = user.copyWith(fpl_team_ID: response['fpl_team_ID'] as String);
+        currentUserNotifier.value = updatedUser;
+        return updatedUser;
+      }
+      throw Exception('Update response missing FPL ID.');
+    } catch (e) {
+      debugPrint('Update FPL ID Error: $e');
+      throw Exception('Failed to update FPL Team ID.');
+    }
+  }
+
+  Future<User> updateProfile(User user, {String? name, String? fplTeamId}) async {
+    try {
+      // 1. Prepare the request body, only including non-null/non-empty fields.
+      final Map<String, dynamic> body = {};
+      if (name != null && name.isNotEmpty) {
+        body['name'] = name;
+      }
+      if (fplTeamId != null && fplTeamId.isNotEmpty) {
+        body['fpl_team_ID'] = fplTeamId;
+      }
+
+      // NOTE: The ID is automatically included on the backend via the JWT.
+      // It's unnecessary to send it in the body.
+
+      // If no data to update, throw a local exception or return current user
+      if (body.isEmpty) {
+        throw Exception('No data provided for profile update.');
+      }
+
+      // 2. Call the backend API
+      final response = await _post(
+        '/api/profile/update',
+        body,
+        token: user.token,
+      );
+
+      // 3. Update the local User model with the new data
+      final updatedUser = user.copyWith(
+        name: body.containsKey('name')
+            ? body['name'] as String
+            : user.name, // Use the new name from the request body
+        fpl_team_ID: body.containsKey('fpl_team_ID')
+            ? body['fpl_team_ID'] as String?
+            : user.fpl_team_ID, // Use the new FPL ID
+      );
+
+      // 4. Notify the rest of the app (like the Dashboard)
+      currentUserNotifier.value = updatedUser;
+
+      return updatedUser;
+    } catch (e) {
+      debugPrint('Profile Update Error: $e');
+      // Re-throw the error for the UI to catch
+      throw Exception('Failed to update profile. Please try again.');
+    }
+  }
+
+  // NEW METHOD: Change Password
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final user = currentUserNotifier.value;
+    if (user == null) {
+      throw Exception('Authentication required for password change.');
+    }
+
+    await _post(
+      '/api/password/change',
+      {
+        'current_password': currentPassword,
+        'new_password': newPassword,
+      },
+      token: user.token,
+    );
+
+    // Password change is successful (no need to update user object, as token is unchanged)
+    // The backend handles the actual password hash update.
   }
 }

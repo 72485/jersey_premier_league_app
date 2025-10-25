@@ -55,7 +55,8 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
-    const Color primaryColor = Color(0xFF1E88E5);
+    // REMOVE: const Color primaryColor = Color(0xFF1E88E5);
+    final themePrimaryColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       appBar: AppBar(
@@ -71,7 +72,8 @@ class _RegisterPageState extends State<RegisterPage> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                const Icon(Icons.person_add, size: 80, color: primaryColor),
+                // Icon - use theme color
+                Icon(Icons.person_add, size: 80, color: themePrimaryColor),
                 const SizedBox(height: 16),
                 const Text(
                   'Create Account',
@@ -87,7 +89,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   validator: (value) => value == null || value.isEmpty ? 'Please enter your name.' : null,
                   decoration: InputDecoration(
                     labelText: 'Name',
-                    prefixIcon: const Icon(Icons.person),
+                    prefixIcon: Icon(Icons.person, color: themePrimaryColor),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     filled: true,
                     fillColor: Colors.white,
@@ -102,7 +104,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   validator: (value) => value == null || !value.contains('@') ? 'Enter a valid email.' : null,
                   decoration: InputDecoration(
                     labelText: 'Email',
-                    prefixIcon: const Icon(Icons.email),
+                    prefixIcon: Icon(Icons.lock, color: themePrimaryColor),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     filled: true,
                     fillColor: Colors.white,
@@ -117,7 +119,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   validator: (value) => value == null || value.length < 6 ? 'Password must be 6+ characters.' : null,
                   decoration: InputDecoration(
                     labelText: 'Password',
-                    prefixIcon: const Icon(Icons.lock),
+                    prefixIcon: Icon(Icons.lock, color: themePrimaryColor),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     filled: true,
                     fillColor: Colors.white,
@@ -140,7 +142,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 ElevatedButton(
                   onPressed: _isLoading ? null : _attemptRegister,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
+                    // backgroundColor is now inherited
                     minimumSize: const Size(double.infinity, 50),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     elevation: 5,
@@ -161,7 +163,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 // Go to Login
                 TextButton(
                   onPressed: widget.onGoToLogin,
-                  child: const Text('Already have an account? Sign In', style: TextStyle(color: primaryColor)),
+                  child: Text('Already have an account? Sign In', style: TextStyle(color: themePrimaryColor)), // Use theme color
                 ),
               ],
             ),

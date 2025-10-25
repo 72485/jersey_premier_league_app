@@ -49,7 +49,8 @@ class _TeamSetupPageState extends State<TeamSetupPage> {
 
   @override
   Widget build(BuildContext context) {
-    const Color primaryColor = Color(0xFF1E88E5);
+    // REMOVE: const Color primaryColor = Color(0xFF1E88E5);
+    final themePrimaryColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       appBar: AppBar(
@@ -74,7 +75,8 @@ class _TeamSetupPageState extends State<TeamSetupPage> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                const Icon(Icons.star, size: 80, color: primaryColor),
+                // Icon - use theme color
+                Icon(Icons.star, size: 80, color: themePrimaryColor),
                 const SizedBox(height: 16),
                 const Text(
                   'Set Your FPL Team ID',
@@ -87,16 +89,13 @@ class _TeamSetupPageState extends State<TeamSetupPage> {
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 16, color: Colors.black54),
                 ),
-                const SizedBox(height: 32),
-
-                // Team ID Input
                 TextFormField(
                   controller: _teamIdController,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     labelText: 'FPL Team ID',
                     hintText: 'e.g., 123456',
-                    prefixIcon: const Icon(Icons.numbers),
+                    prefixIcon: Icon(Icons.numbers, color: themePrimaryColor), // Use theme color
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     filled: true,
                     fillColor: Colors.white,
@@ -124,11 +123,11 @@ class _TeamSetupPageState extends State<TeamSetupPage> {
                     ),
                   ),
 
-                // Save Button
+                // Save Button - relies on inherited ElevatedButtonTheme
                 ElevatedButton(
                   onPressed: _isSaving ? null : _saveTeamId,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
+                    // backgroundColor is now inherited
                     minimumSize: const Size(double.infinity, 50),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     elevation: 5,

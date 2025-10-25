@@ -4,12 +4,14 @@ class GridItem extends StatelessWidget {
   final String title;
   final IconData icon;
   final Color color;
+  final VoidCallback? onTapCallback; // New optional callback
 
   const GridItem({
     super.key,
     required this.title,
     required this.icon,
     required this.color,
+    this.onTapCallback, // Add to constructor
   });
 
   @override
@@ -21,13 +23,18 @@ class GridItem extends StatelessWidget {
       ),
       child: InkWell(
         onTap: () {
-          // In a real app, this would navigate to the specific page
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Tapped on $title'),
-              duration: const Duration(milliseconds: 800),
-            ),
-          );
+          // 1. Execute the provided callback first (e.g., navigation)
+          onTapCallback?.call();
+
+          // 2. Fallback/default action: show SnackBar if no specific callback was provided
+          if (onTapCallback == null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Tapped on $title'),
+                duration: const Duration(milliseconds: 800),
+              ),
+            );
+          }
         },
         borderRadius: BorderRadius.circular(16),
         child: Container(
@@ -44,17 +51,26 @@ class GridItem extends StatelessWidget {
           ),
           padding: const EdgeInsets.all(16),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            // ⚡ FIX: Set mainAxisAlignment to spaceBetween or start to better utilize space
+            mainAxisAlignment: MainAxisAlignment.start, // Changed from center to start
+            crossAxisAlignment: CrossAxisAlignment.center,
+
             children: [
-              Icon(icon, size: 48, color: Colors.white),
-              const SizedBox(height: 12),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+              Icon(icon, size: 40, color: Colors.white), // Slightly reduce icon size for safety (from 48 to 40)
+              const SizedBox(height: 8), // Reduce spacing slightly
+
+              // ⚡ FIX: Use an Expanded/Flexible widget around the text
+              Expanded(
+                child: Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  maxLines: 2, // Ensure it doesn't try to grow endlessly
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16, // Slightly reduce font size for safety (from 18 to 16)
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],

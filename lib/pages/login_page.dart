@@ -5,11 +5,14 @@ import 'package:jersey_premier_league/models/user_model.dart';
 typedef SignInCallback = Future<User?> Function(String email, String password);
 typedef GoToRegisterCallback = VoidCallback;
 
+// Define a theme color for consistency (used by other pages too)
+const Color primaryColor = Color(0xFF0D1B2A); // Dark Blue
+
 class LoginPage extends StatefulWidget {
   final SignInCallback onSignIn;
   final Future<User?> Function() onGoogleSignIn; // Now uses the new Guest Login signature
   final GoToRegisterCallback onGoToRegister;
-  final bool isLoading;
+  final bool isLoading; // Not used locally, but kept for main.dart consistency
 
   const LoginPage({
     super.key,
@@ -29,6 +32,7 @@ class _LoginPageState extends State<LoginPage> {
   String? _errorMessage;
   bool _localLoading = false; // Separate loading state for the buttons
 
+  // --- Core Login Logic ---
   void _attemptLogin() async {
     if (_localLoading) return;
 
@@ -41,52 +45,83 @@ class _LoginPageState extends State<LoginPage> {
       setState(() {
         _errorMessage = 'Please enter both email and password.';
         _localLoading = false;
+        return;
       });
-      return;
     }
 
     try {
-      await widget.onSignIn(_emailController.text, _passwordController.text);
-      // Success: The AuthService's ValueNotifier updates the main app state.
+      final user = await widget.onSignIn(
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
+      );
+
+      // IMPORTANT: If 'user' is returned successfully, the AuthService state changes,
+      // and main.dart automatically navigates. We do NOT need to call setState to stop loading.
+      if (user == null) {
+        // Login failed (AuthService returned null, indicating invalid credentials)
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Invalid email or password. Please try again.';
+            _localLoading = false;
+          });
+        }
+      }
+      // If user is NOT null, main.dart's ValueListenableBuilder handles the navigation.
+
+      // Optional: Clear fields on success
+      _emailController.clear();
+      _passwordController.clear();
+
     } catch (e) {
-      // Display error message thrown by AuthService
-      setState(() => _errorMessage = e.toString().replaceFirst('Exception: ', ''));
-    } finally {
+      // API or Network Error
       if (mounted) {
-        setState(() => _localLoading = false);
+        setState(() {
+          _errorMessage = e.toString().contains('Invalid credentials')
+              ? 'Invalid email or password.'
+              : 'Login failed: ${e.toString().replaceAll('Exception: ', '')}';
+          _localLoading = false;
+        });
       }
     }
   }
 
+  // --- Guest Login Logic ---
   void _attemptGuestLogin() async {
     if (_localLoading) return;
+
     setState(() {
       _errorMessage = null;
       _localLoading = true;
     });
 
     try {
+      // Assuming onGoogleSignIn is now used for guest sign-in
       await widget.onGoogleSignIn();
-      // Success: AuthService updates state
+      // If successful, main.dart navigates, so we stop loading.
     } catch (e) {
-      setState(() => _errorMessage = e.toString().replaceFirst('Exception: ', ''));
-    } finally {
       if (mounted) {
-        setState(() => _localLoading = false);
+        setState(() {
+          _errorMessage = 'Guest sign-in failed: API not implemented.';
+          _localLoading = false;
+        });
       }
     }
   }
 
+
   @override
   Widget build(BuildContext context) {
-    const Color primaryColor = Color(0xFF1E88E5);
+    // We use a combined loading state to disable all buttons during any auth attempt
+    // Access ambient primary color from the theme
+    final themePrimaryColor = Theme.of(context).colorScheme.primary;
 
-    final bool combinedLoading = _localLoading || widget.isLoading;
+    // We use a combined loading state to disable all buttons during any auth attempt
+    final combinedLoading = _localLoading || widget.isLoading;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('JPL Login'),
-        centerTitle: true,
+        automaticallyImplyLeading: false,
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -95,45 +130,49 @@ class _LoginPageState extends State<LoginPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              // App Icon/Logo
-              const Icon(Icons.sports_soccer, size: 80, color: primaryColor),
-              const SizedBox(height: 16),
-              const Text(
+              // Use theme color for icon
+              Icon(Icons.sports_football, size: 80, color: themePrimaryColor),
+              const SizedBox(height: 30),
+
+              Text(
                 'Sign In',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87),
+                // Use theme color for text
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: themePrimaryColor),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 40),
 
               // Email Field
-              TextField(
+              TextFormField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
                   labelText: 'Email',
-                  hintText: 'Try test@user.com or admin@user.com (password: password)',
-                  prefixIcon: const Icon(Icons.email),
+                  // Use theme color for prefix icon
+                  prefixIcon: Icon(Icons.email_outlined, color: themePrimaryColor),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: Colors.grey.shade100,
                 ),
+                enabled: !combinedLoading,
               ),
               const SizedBox(height: 16),
 
               // Password Field
-              TextField(
+              TextFormField(
                 controller: _passwordController,
                 obscureText: true,
                 decoration: InputDecoration(
                   labelText: 'Password',
-                  hintText: 'password',
-                  prefixIcon: const Icon(Icons.lock),
+                  // Use theme color for prefix icon
+                  prefixIcon: Icon(Icons.lock_outline, color: themePrimaryColor),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: Colors.grey.shade100,
                 ),
+                enabled: !combinedLoading,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
               // Error Message
               if (_errorMessage != null)
@@ -150,7 +189,6 @@ class _LoginPageState extends State<LoginPage> {
               ElevatedButton(
                 onPressed: combinedLoading ? null : _attemptLogin,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryColor,
                   minimumSize: const Size(double.infinity, 50),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   elevation: 5,
@@ -174,15 +212,17 @@ class _LoginPageState extends State<LoginPage> {
               // Guest Login Button (Mocked)
               OutlinedButton.icon(
                 onPressed: combinedLoading ? null : _attemptGuestLogin,
-                icon: const Icon(Icons.person_pin, color: primaryColor),
-                label: const Text(
+                // Use theme color for icon/text
+                icon: Icon(Icons.person_pin, color: themePrimaryColor),
+                label: Text(
                   'Sign in as Guest',
-                  style: TextStyle(fontSize: 16, color: primaryColor),
+                  style: TextStyle(fontSize: 16, color: themePrimaryColor),
                 ),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 50),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  side: const BorderSide(color: primaryColor, width: 1.5),
+                  // Use theme color for border
+                  side: BorderSide(color: themePrimaryColor, width: 1.5),
                   backgroundColor: Colors.white,
                 ),
               ),

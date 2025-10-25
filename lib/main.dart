@@ -1,107 +1,138 @@
+// In main.dart
+
 import 'package:flutter/material.dart';
+import 'package:jersey_premier_league/services/auth_service.dart'; // REQUIRED: Imports the service
+import 'package:jersey_premier_league/models/user_model.dart'; // REQUIRED: Imports the User model
 
-import 'package:jersey_premier_league/models/user_model.dart';
-import 'package:jersey_premier_league/services/auth_service.dart';
+// Import all required pages
 import 'package:jersey_premier_league/pages/login_page.dart';
-import 'package:jersey_premier_league/pages/dashboard_page.dart';
-import 'package:jersey_premier_league/pages/team_setup_page.dart';
 import 'package:jersey_premier_league/pages/register_page.dart';
+import 'package:jersey_premier_league/pages/team_setup_page.dart';
+import 'package:jersey_premier_league/pages/dashboard_page.dart';
+import 'package:jersey_premier_league/pages/profile_page.dart'; // Assuming this exists from previous step
+import 'package:jersey_premier_league/pages/change_password_page.dart'; // Assuming this exists from previous step
 
-// --- Global Constants and Styling ---
-const Color primaryColor = Color(0xFF1E88E5); // Blue for primary
-const Color accentColor = Color(0xFFFFC107); // Amber for accent/buttons
-const Color backgroundColor = Color(0xFFF5F5F5); // Light background
 
-// --- Main Application Widget ---
+// Define a common color for the app theme (Ambient Blue Grey 800)
+const Color primaryColor = Color(0xFF37474F);
+
 void main() {
-  runApp(const FantasyApp());
+  // Initialize the AuthService instance once and run the app.
+  final authService = AuthService();
+  runApp(MyApp(authService: authService));
 }
 
-// Enum to manage the top-level Auth state (Login vs Register)
-enum AuthFlowState { login, register }
+class MyApp extends StatelessWidget {
+  final AuthService authService;
 
-class FantasyApp extends StatelessWidget {
-  const FantasyApp({super.key});
-
-  // Since we removed Firebase init, we can create the service directly.
-  // It's defined here and passed down.
-  static final AuthService authService = AuthService();
+  const MyApp({super.key, required this.authService});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'JPL', // App Title
+      title: 'Jersey Premier League',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
+        // Use the new ambient primary color
         primaryColor: primaryColor,
-        colorScheme: ColorScheme.fromSwatch().copyWith(secondary: accentColor),
-        scaffoldBackgroundColor: backgroundColor,
-        fontFamily: 'Inter',
+        useMaterial3: true,
+        textTheme: Theme.of(context).textTheme.apply(
+          fontFamily: 'Inter',
+        ),
+        // Define an Ambient ColorScheme
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: primaryColor,
+          primary: primaryColor,
+          // Muted Lime for secondary/accent
+          secondary: const Color(0xFFD4E157),
+        ),
+        // Apply ambient theme globally for consistency
         appBarTheme: const AppBarTheme(
-          color: primaryColor,
-          elevation: 0,
+          backgroundColor: primaryColor,
+          foregroundColor: Colors.white,
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: primaryColor,
+            foregroundColor: Colors.white,
+          ),
         ),
       ),
-      home: AuthGate(authService: authService),
+      // The home widget listens to the AuthService state change
+      home: ValueListenableBuilder<User?>(
+        valueListenable: authService.currentUserNotifier,
+        builder: (context, user, child) {
+          // 1. User is NOT authenticated (Show Login/Register Flow)
+          if (user == null) {
+            return AuthFlowPage(authService: authService);
+          }
+
+          // 2. User IS authenticated but hasn't set up FPL ID (Show Team Setup)
+          if (user.fpl_team_ID == null || user.fpl_team_ID!.isEmpty) {
+            return TeamSetupPage(user: user, authService: authService);
+          }
+
+          // 3. User is fully set up (Show Dashboard)
+          return DashboardPage(
+            user: user,
+            authService: authService, // FIX: Pass the required argument
+            onSignOut: authService.signOut,
+          );
+        },
+      ),
     );
   }
 }
 
-// Widget to handle the Auth state stream (ValueNotifier) and top-level navigation
-class AuthGate extends StatefulWidget {
+// ... (AuthFlowPage and its state remain the same)
+
+// Helper widget to manage the flow between Login and Register pages
+class AuthFlowPage extends StatefulWidget {
   final AuthService authService;
 
-  const AuthGate({super.key, required this.authService});
+  const AuthFlowPage({super.key, required this.authService});
 
   @override
-  State<AuthGate> createState() => _AuthGateState();
+  State<AuthFlowPage> createState() => _AuthFlowPageState();
 }
 
-class _AuthGateState extends State<AuthGate> {
-  // Use a state variable to switch between Login and Register pages
-  AuthFlowState _authFlowState = AuthFlowState.login;
-  bool _isLoading = false; // State for loading indicator in Login/Register
+enum AuthMode { login, register }
+
+class _AuthFlowPageState extends State<AuthFlowPage> {
+  AuthMode _authMode = AuthMode.login;
+
+  // Since main.dart uses ValueListenableBuilder, the local loading state is mainly for button disabling.
+  // We can simplify this by just letting the button handle its own local loading state (already done in login_page.dart).
+
+  void _goToRegister() {
+    setState(() {
+      _authMode = AuthMode.register;
+    });
+  }
+
+  void _goToLogin() {
+    setState(() {
+      _authMode = AuthMode.login;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    // ValueListenableBuilder listens to the currentUserNotifier in the AuthService
-    return ValueListenableBuilder<User?>(
-      valueListenable: widget.authService.currentUserNotifier,
-      builder: (context, user, child) {
-        // --- Conditional Navigation Logic ---
-        final bool isLoggedIn = user != null;
-
-        // 1. User is NOT Logged In
-        if (!isLoggedIn) {
-          if (_authFlowState == AuthFlowState.login) {
-            return LoginPage(
-              onSignIn: widget.authService.signIn,
-              onGoogleSignIn: widget.authService.signInAsGuest, // Renamed/Refactored to Guest Login
-              onGoToRegister: () => setState(() => _authFlowState = AuthFlowState.register),
-              isLoading: _isLoading,
-            );
-          } else {
-            return RegisterPage(
-              onRegister: widget.authService.signUp,
-              onGoToLogin: () => setState(() => _authFlowState = AuthFlowState.login),
-            );
-          }
-        }
-
-        // 2. User IS Logged In, but needs FPL ID setup
-        if (user!.fpl_team_ID == null || user.fpl_team_ID!.isEmpty) {
-          return TeamSetupPage(
-            user: user,
-            authService: widget.authService, // Pass the service for saving the ID
-          );
-        }
-
-        // 3. User is Logged In and FPL ID is set -> Show Dashboard
-        return DashboardPage(
-          user: user,
-          onSignOut: widget.authService.signOut,
-        );
-      },
-    );
+    // Determine which page to show
+    if (_authMode == AuthMode.login) {
+      return LoginPage(
+        // Pass the methods directly from the service
+        onSignIn: widget.authService.signIn,
+        onGoogleSignIn: widget.authService.signInAsGuest, // Used for guest/mock sign in
+        isLoading: false, // Local loading is handled in the page
+        onGoToRegister: _goToRegister,
+      );
+    } else {
+      return RegisterPage(
+        // Pass the methods directly from the service
+        onRegister: widget.authService.register,
+        onGoToLogin: _goToLogin,
+      );
+    }
   }
 }
