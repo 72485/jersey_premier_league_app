@@ -1,3 +1,5 @@
+// lib/services/auth_service.dart
+
 import 'package:flutter/foundation.dart';
 import 'package:jersey_premier_league/models/user_model.dart';
 import 'package:http/http.dart' as http; // Official HTTP package for network calls
@@ -41,11 +43,15 @@ class AuthService {
       } else {
         // Logic to extract specific error message (e.g., "Incorrect current password")
         String errorMessage = 'An unknown server error occurred.';
+        String errorCode = ''; // Used to send specific codes like FPL_TEAM_ID_EXISTS
 
         try {
           final errorBody = json.decode(response.body);
           if (errorBody.containsKey('error')) {
             errorMessage = errorBody['error'] as String;
+          }
+          if (errorBody.containsKey('code')) {
+            errorCode = errorBody['code'] as String; // Assume backend sends a 'code' like FPL_TEAM_ID_EXISTS
           } else {
             errorMessage = 'Request failed with status: ${response.statusCode}';
           }
@@ -53,7 +59,8 @@ class AuthService {
           errorMessage = 'Request failed with status: ${response.statusCode}. Could not parse error details.';
         }
 
-        throw Exception(errorMessage);
+        // Throw an exception that includes the specific code if available
+        throw Exception(errorCode.isNotEmpty ? errorCode : errorMessage);
       }
     } on TimeoutException { // 👈 This will now be recognized
       throw Exception('Network request timed out. Please check your connection.');
@@ -62,7 +69,7 @@ class AuthService {
     }
   }
 
-  // ... (signIn, register, signOut, updateFplTeamID methods are unchanged)
+  // ... (signIn, register, signOut methods are unchanged)
   Future<User?> signIn(String email, String password) async {
     try {
       final response = await _post(
@@ -117,12 +124,14 @@ class AuthService {
   }
 
   Future<User> updateFplTeamID(User user, String teamId) async {
+    // This old method is now redundant and should be integrated or deprecated.
+    // Keeping it here for now, but the new updateUser should be used.
     try {
       final response = await _post(
         '/api/profile/update',
         {
           'fpl_team_ID': teamId,
-          'id': user.id,
+          'id': user.id, // ID is often unnecessary if token is used
         },
         token: user.token,
       );
@@ -139,50 +148,56 @@ class AuthService {
     }
   }
 
-  Future<User> updateProfile(User user, {String? name, String? fplTeamId}) async {
+  // ⚡ FIX: Renamed from updateProfile and changed return type to Future<Result>
+  Future<Result> updateUser(User user) async {
     try {
-      // 1. Prepare the request body, only including non-null/non-empty fields.
-      final Map<String, dynamic> body = {};
-      if (name != null && name.isNotEmpty) {
-        body['name'] = name;
-      }
-      if (fplTeamId != null && fplTeamId.isNotEmpty) {
-        body['fpl_team_ID'] = fplTeamId;
-      }
-
-      // NOTE: The ID is automatically included on the backend via the JWT.
-      // It's unnecessary to send it in the body.
-
-      // If no data to update, throw a local exception or return current user
-      if (body.isEmpty) {
-        throw Exception('No data provided for profile update.');
-      }
+      // 1. Prepare the request body from the incoming User object
+      final Map<String, dynamic> body = {
+        // Only include fields that are meant to be updated
+        'name': user.name,
+        'fpl_team_ID': user.fpl_team_ID,
+      };
 
       // 2. Call the backend API
+      // The backend should handle which fields are actually different and only update those.
       final response = await _post(
         '/api/profile/update',
         body,
         token: user.token,
       );
 
-      // 3. Update the local User model with the new data
+      // 3. Update the local User model with the potentially new data
+      //    (The response should ideally return the fully updated user object)
+      //    For simplicity here, we assume the provided 'user' object is the correct updated model.
+
+      // We will assume the backend returns the updated fields for simplicity,
+      // and we merge them with the existing user data.
       final updatedUser = user.copyWith(
-        name: body.containsKey('name')
-            ? body['name'] as String
-            : user.name, // Use the new name from the request body
-        fpl_team_ID: body.containsKey('fpl_team_ID')
-            ? body['fpl_team_ID'] as String?
-            : user.fpl_team_ID, // Use the new FPL ID
+        name: response['name'] ?? user.name,
+        fpl_team_ID: response['fpl_team_ID'] ?? user.fpl_team_ID,
       );
 
-      // 4. Notify the rest of the app (like the Dashboard)
+      // 4. Notify the rest of the app
       currentUserNotifier.value = updatedUser;
 
-      return updatedUser;
+      return Result(success: true);
     } catch (e) {
+      final errorMessage = e.toString().replaceFirst('Exception: ', '');
       debugPrint('Profile Update Error: $e');
-      // Re-throw the error for the UI to catch
-      throw Exception('Failed to update profile. Please try again.');
+
+      // Check for the specific FPL Team ID conflict code returned from the backend
+      if (errorMessage == 'FPL_TEAM_ID_EXISTS') {
+        return Result(
+          success: false,
+          message: 'FPL_TEAM_ID_EXISTS',
+        );
+      }
+
+      // Handle other generic errors
+      return Result(
+        success: false,
+        message: 'Failed to update profile: $errorMessage',
+      );
     }
   }
 
@@ -206,7 +221,6 @@ class AuthService {
     );
 
     // Password change is successful (no need to update user object, as token is unchanged)
-    // The backend handles the actual password hash update.
   }
 
   // ⚡ ACTUAL IMPLEMENTATION: Now uses Google Sign-In and calls the backend
@@ -230,11 +244,7 @@ class AuthService {
       throw Exception('Failed to retrieve Google ID Token.');
     }
 
-    // final String idToken = googleAuth.idToken!; // The token to send to the backend
     // ----------------------------------------------------
-
-    // ⚠️ Placeholder: You must replace this with the real token retrieval flow above
-    //const String idToken = 'REAL_GOOGLE_ID_TOKEN_PLACEHOLDER';
 
     try {
       // 3. Send ID token to your backend via a new endpoint

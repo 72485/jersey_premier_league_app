@@ -1,5 +1,12 @@
 import 'package:flutter/material.dart';
 
+class Result {
+  final bool success;
+  final String message;
+
+  Result({required this.success, this.message = ''});
+}
+
 class User {
   final int id;
   final String email;

@@ -6,12 +6,13 @@ class GridItem extends StatelessWidget {
   final Color color;
   final VoidCallback? onTapCallback; // New optional callback
 
+  // ⚡ FIX: Mark the constructor as const
   const GridItem({
     super.key,
     required this.title,
     required this.icon,
     required this.color,
-    this.onTapCallback, // Add to constructor
+    this.onTapCallback,
   });
 
   @override

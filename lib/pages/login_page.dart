@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:jersey_premier_league/models/user_model.dart';
+import 'package:jersey_premier_league/main.dart'; // Import main.dart to access gradient colors
 
-// New typedefs reflecting the direct calls to AuthService
+// Update the typedefs to remove the one for admin sign-in (if it existed)
 typedef SignInCallback = Future<User?> Function(String email, String password);
+typedef GoogleSignInCallback = Future<User?> Function();
 typedef GoToRegisterCallback = VoidCallback;
 
-// REMOVED: const Color primaryColor = Color(0xFF0D1B2A); // Dark Blue (No longer needed, using theme)
 
 class LoginPage extends StatefulWidget {
   final SignInCallback onSignIn;
-  final Future<User?> Function() onGoogleSignIn; // Used for Google/mock sign in
+  final GoogleSignInCallback onGoogleSignIn;
   final GoToRegisterCallback onGoToRegister;
   final bool isLoading;
+  // ⚡ FIX: Removed the 'onAdminSignIn' declaration and requirement
+  // final SignInCallback onAdminSignIn; // <-- This line is removed
 
   const LoginPage({
     super.key,
@@ -19,6 +22,7 @@ class LoginPage extends StatefulWidget {
     required this.onGoogleSignIn,
     required this.isLoading,
     required this.onGoToRegister,
+    // required this.onAdminSignIn, // <-- This is removed from the constructor
   });
 
   @override
@@ -33,6 +37,7 @@ class _LoginPageState extends State<LoginPage> {
 
   // --- Core Login Logic ---
   void _attemptLogin() async {
+    // ... (logic remains the same)
     if (_localLoading) return;
 
     setState(() {
@@ -42,47 +47,34 @@ class _LoginPageState extends State<LoginPage> {
 
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
       setState(() {
-        _errorMessage = 'Please enter both email and password.';
+        _errorMessage = "Please enter both email and password.";
         _localLoading = false;
-        return;
       });
+      return;
     }
 
     try {
-      final user = await widget.onSignIn(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
-      );
-
-      // If 'user' is returned successfully, the AuthService state changes,
-      // and main.dart automatically navigates.
+      final user = await widget.onSignIn(_emailController.text, _passwordController.text);
       if (user == null) {
-        if (mounted) {
-          setState(() {
-            _errorMessage = 'Invalid email or password. Please try again.';
-            _localLoading = false;
-          });
-        }
+        setState(() {
+          _errorMessage = "Invalid email or password.";
+        });
       }
-
-      // Optional: Clear fields on success
-      _emailController.clear();
-      _passwordController.clear();
-
     } catch (e) {
-      // API or Network Error
+      setState(() {
+        _errorMessage = "Login failed: ${e.toString()}";
+      });
+    } finally {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Login failed: ${e.toString().replaceAll('Exception: ', '')}';
           _localLoading = false;
         });
       }
     }
   }
 
-  // ⚡ FIX: Renamed method to _attemptGoogleLogin for clarity
   void _attemptGoogleLogin() async {
-    if (_localLoading) return;
+    if (widget.isLoading || _localLoading) return;
 
     setState(() {
       _errorMessage = null;
@@ -90,111 +82,97 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      // Calls the new signInWithGoogle (mock) method via the widget callback
       await widget.onGoogleSignIn();
-      // If successful (if mock was removed and actual sign-in implemented), main.dart navigates.
-    } on Exception catch (e) {
-      // Display the specific error message from the service
-      if (mounted) {
-        setState(() {
-          // Use the specific message from the AuthService: "Google Sign-In is not yet implemented."
-          _errorMessage = e.toString().replaceFirst('Exception: ', '');
-          _localLoading = false;
-        });
-      }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'An unknown error occurred during Google sign-in.';
+          _errorMessage = "Google sign-in failed: ${e.toString()}";
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
           _localLoading = false;
         });
       }
     }
   }
 
+  // NOTE: If you had a dedicated button/logic for admin login, you must remove it here as well.
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Access ambient primary color from the theme
     final themePrimaryColor = Theme.of(context).colorScheme.primary;
-
-    // We use a combined loading state to disable all buttons during any auth attempt
-    final combinedLoading = _localLoading || widget.isLoading;
+    final combinedLoading = widget.isLoading || _localLoading;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('JPL Login'),
-        automaticallyImplyLeading: false,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            // Use the gradient colors defined in main.dart
+            gradient: LinearGradient(
+              colors: appBarGradientColors,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        foregroundColor: Colors.white,
       ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32.0),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Form(
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              // Use theme color for icon
-              Icon(Icons.sports_football, size: 80, color: themePrimaryColor),
+            children: [
               const SizedBox(height: 30),
-
-              Text(
-                'Sign In',
-                textAlign: TextAlign.center,
-                // Use theme color for text
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: themePrimaryColor),
-              ),
-              const SizedBox(height: 40),
-
               // Email Field
               TextFormField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Email',
-                  // Use theme color for prefix icon
-                  prefixIcon: Icon(Icons.email_outlined, color: themePrimaryColor),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  filled: true,
-                  fillColor: Colors.grey.shade100,
-                ),
-                enabled: !combinedLoading,
-              ),
-              const SizedBox(height: 16),
-
-              // Password Field
-              TextFormField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: 'Password',
-                  // Use theme color for prefix icon
-                  prefixIcon: Icon(Icons.lock_outline, color: themePrimaryColor),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  filled: true,
-                  fillColor: Colors.grey.shade100,
+                  prefixIcon: Icon(Icons.email),
                 ),
                 enabled: !combinedLoading,
               ),
               const SizedBox(height: 20),
-
-              // Error Message
+              // Password Field
+              TextFormField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Password',
+                  prefixIcon: Icon(Icons.lock),
+                ),
+                enabled: !combinedLoading,
+              ),
               if (_errorMessage != null)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 16.0),
+                  padding: const EdgeInsets.only(top: 10.0),
                   child: Text(
                     _errorMessage!,
-                    style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: Theme.of(context).colorScheme.error, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
                   ),
                 ),
+              const SizedBox(height: 30),
 
-              // Login Button
+              // Standard Login Button
               ElevatedButton(
                 onPressed: combinedLoading ? null : _attemptLogin,
                 style: ElevatedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 5,
                 ),
                 child: combinedLoading
                     ? const SizedBox(
@@ -214,9 +192,7 @@ class _LoginPageState extends State<LoginPage> {
 
               // Google Login Button
               OutlinedButton.icon(
-                // ⚡ FIX: Use the new _attemptGoogleLogin method
                 onPressed: combinedLoading ? null : _attemptGoogleLogin,
-                // Use a Google-like icon
                 icon: Icon(
                   Icons.g_mobiledata_outlined,
                   color: themePrimaryColor,
@@ -228,8 +204,6 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  side: BorderSide(color: themePrimaryColor, width: 1.5),
                   backgroundColor: Colors.white,
                 ),
               ),
@@ -238,8 +212,7 @@ class _LoginPageState extends State<LoginPage> {
               // Go to Register
               TextButton(
                 onPressed: combinedLoading ? null : widget.onGoToRegister,
-                // ⚡ FIX: Use themePrimaryColor instead of hardcoded primaryColor
-                child: Text('Don\'t have an account? Register', style: TextStyle(color: themePrimaryColor)),
+                child: Text("Don't have an account? Register", style: TextStyle(color: themePrimaryColor)),
               ),
             ],
           ),

@@ -1,18 +1,19 @@
+// lib/pages/profile_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:jersey_premier_league/models/user_model.dart';
 import 'package:jersey_premier_league/services/auth_service.dart';
 
-// Assuming primaryColor is defined somewhere, for consistency with other pages
-const Color primaryColor = Color(0xFF1E88E5);
-
 class ProfilePage extends StatefulWidget {
   final User user;
   final AuthService authService;
+  final VoidCallback onSignOut;
 
   const ProfilePage({
     super.key,
     required this.user,
     required this.authService,
+    required this.onSignOut,
   });
 
   @override
@@ -20,152 +21,216 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _teamIdController = TextEditingController();
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  // Form Key for validation
+  final _formKey = GlobalKey<FormState>();
+
+  // Controllers for editable fields
+  late TextEditingController _nameController;
+  late TextEditingController _fplTeamIdController;
+
+  // Track the saving state
   bool _isSaving = false;
-  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
     // Initialize controllers with current user data
-    _nameController.text = widget.user.name;
-    _teamIdController.text = widget.user.fpl_team_ID ?? '';
+    _nameController = TextEditingController(text: widget.user.name);
+    _fplTeamIdController = TextEditingController(text: widget.user.fpl_team_ID);
   }
 
   @override
   void dispose() {
     _nameController.dispose();
-    _teamIdController.dispose();
+    _fplTeamIdController.dispose();
     super.dispose();
   }
 
-  void _saveProfile() async {
-    if (!_formKey.currentState!.validate()) return;
+  // Helper method to show a SnackBar message
+  void _showSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : Colors.green,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
 
-    // Check if the user is already saving
-    if (_isSaving) return;
-
-    setState(() {
-      _isSaving = true;
-      _errorMessage = null;
-    });
-
-    final newName = _nameController.text.trim();
-    // Use null for empty string FPL IDs, consistent with database structure
-    final newFplId = _teamIdController.text.trim().isEmpty ? null : _teamIdController.text.trim();
-
-    // Check if anything has actually changed before calling the API
-    if (newName == widget.user.name && newFplId == widget.user.fpl_team_ID) {
-      setState(() {
-        _isSaving = false;
-        _errorMessage = 'No changes detected.';
-      });
+  Future<void> _updateProfile() async {
+    if (!_formKey.currentState!.validate()) {
       return;
     }
 
+    // Check if any value has actually changed before proceeding
+    final newName = _nameController.text.trim();
+    final newFplTeamId = _fplTeamIdController.text.trim();
+
+    // The FPL Team ID is considered the same if it matches the current user's ID
+    // or if the trimmed text matches
+    final isNameUnchanged = newName == widget.user.name;
+    final isFplIdUnchanged = newFplTeamId == (widget.user.fpl_team_ID ?? '');
+
+    if (isNameUnchanged && isFplIdUnchanged) {
+      _showSnackBar('No changes detected.');
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    // Create a new User object with the updated details
+    final updatedUser = widget.user.copyWith(
+      name: newName,
+      fpl_team_ID: newFplTeamId,
+    );
+
     try {
-      // The updateProfile function handles both name and fplTeamId updates
-      await widget.authService.updateProfile(
-        widget.user,
-        name: newName,
-        fplTeamId: newFplId,
-      );
+      // 🚨 Service call to update the user in the backend
+      final result = await widget.authService.updateUser(updatedUser);
 
-      // Success feedback
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully!')),
-        );
-        setState(() => _isSaving = false);
+      if (result.success) {
+        // Success: Notify the user and update the parent widget's state if possible,
+        // (though in a real app, the auth service would typically handle state update)
+        _showSnackBar('Profile updated successfully!');
+      } else {
+        // Handle specific error case for duplicate FPL Team ID
+        if (result.message.contains('FPL_TEAM_ID_EXISTS')) {
+          _showSnackBar(
+            'This FPL Team ID is already in use by another user.',
+            isError: true,
+          );
+        } else {
+          _showSnackBar(
+            'Failed to update profile: ${result.message}',
+            isError: true,
+          );
+        }
       }
-
     } catch (e) {
+      _showSnackBar('An unexpected error occurred.', isError: true);
+    } finally {
       setState(() {
         _isSaving = false;
-        _errorMessage = 'Failed to update profile: ${e.toString()}';
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Profile'),
-        actions: [
-          // Save Icon in the AppBar
-          IconButton(
-            icon: _isSaving
-                ? const SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
-            )
-                : const Icon(Icons.save),
-            onPressed: _isSaving ? null : _saveProfile,
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              // --- Uneditable Email Display ---
-              Text(
-                'Email (Login Identifier)',
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            // --- Email (Not Editable) ---
+            const Text(
+              'Email (Not Editable)',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              initialValue: widget.user.email,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.email),
+                fillColor: Colors.grey, // Visually indicate it's disabled
+                filled: true,
               ),
-              const SizedBox(height: 4),
-              Text(
-                widget.user.email,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-              ),
-              const Divider(height: 32),
+              enabled: false, // Disables editing
+              style: const TextStyle(color: Colors.black54),
+            ),
+            const SizedBox(height: 24),
 
-              // --- Editable Name ---
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Name',
-                  prefixIcon: Icon(Icons.person),
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Name cannot be empty';
-                  }
-                  return null;
-                },
+            // --- Name (Editable) ---
+            const Text(
+              'Name',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _nameController,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.person),
+                hintText: 'Enter your full name',
               ),
-              const SizedBox(height: 16),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please enter your name.';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 24),
 
-              // --- Editable FPL Team ID ---
-              TextFormField(
-                controller: _teamIdController,
-                decoration: const InputDecoration(
-                  labelText: 'FPL Team ID (Optional)',
-                  hintText: 'Enter your FPL Team ID',
-                  prefixIcon: Icon(Icons.numbers),
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
+            // --- FPL Team ID (Editable & Unique Check) ---
+            const Text(
+              'FPL Team ID',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _fplTeamIdController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.sports_soccer),
+                hintText: 'Enter your FPL Team ID (e.g., 12345)',
               ),
-              const SizedBox(height: 24),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please enter your FPL Team ID.';
+                }
+                if (int.tryParse(value) == null) {
+                  return 'FPL Team ID must be a number.';
+                }
+                // The actual uniqueness check (FPL_TEAM_ID_EXISTS) is handled
+                // in the _updateProfile function upon saving.
+                return null;
+              },
+            ),
+            const SizedBox(height: 32),
 
-              // Error Message
-              if (_errorMessage != null)
-                Text(
-                  _errorMessage!,
-                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
+            // --- Save Button ---
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _isSaving ? null : _updateProfile,
+                icon: _isSaving
+                    ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                    : const Icon(Icons.save),
+                label: Text(_isSaving ? 'Saving...' : 'Save Changes'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 15),
                 ),
-            ],
-          ),
+              ),
+            ),
+            const SizedBox(height: 32),
+
+            // --- Sign Out Button ---
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: widget.onSignOut,
+                icon: const Icon(Icons.logout),
+                label: const Text('Sign Out'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  side: const BorderSide(color: Colors.red),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
