@@ -5,6 +5,10 @@ let transporter;
 
 // Configure based on email service
 if (process.env.EMAIL_SERVICE === 'gmail') {
+  console.log('[EMAIL] Configuring Gmail transporter');
+  console.log('[EMAIL] Email From:', process.env.EMAIL_FROM);
+  console.log('[EMAIL] Email Password Set:', !!process.env.EMAIL_APP_PASSWORD);
+  
   transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
@@ -13,7 +17,7 @@ if (process.env.EMAIL_SERVICE === 'gmail') {
     },
   });
 } else {
-  // Generic SMTP configuration
+  console.log('[EMAIL] Configuring generic SMTP transporter');
   transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: process.env.SMTP_PORT,
@@ -33,22 +37,37 @@ if (process.env.EMAIL_SERVICE === 'gmail') {
  */
 const sendEmail = async (to, subject, html) => {
   try {
-    console.log(`[EMAIL] Sending email to: ${to}`);
+    console.log(`[EMAIL] === Starting email send ===`);
+    console.log(`[EMAIL] To: ${to}`);
+    console.log(`[EMAIL] Subject: ${subject}`);
+    console.log(`[EMAIL] From: ${process.env.EMAIL_FROM || 'NOT SET'}`);
+    console.log(`[EMAIL] Service: ${process.env.EMAIL_SERVICE || 'NOT SET'}`);
+    
+    const mailOptions = {
+      from: process.env.EMAIL_FROM,
+      to,
+      subject,
+      html,
+    };
+    
+    console.log('[EMAIL] Calling transporter.sendMail...');
     const info = await Promise.race([
-      transporter.sendMail({
-        from: process.env.EMAIL_FROM,
-        to,
-        subject,
-        html,
-      }),
+      transporter.sendMail(mailOptions),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Email send timeout after 10 seconds')), 10000)
       )
     ]);
-    console.log(`[EMAIL] Email sent successfully to ${to}:`, info.messageId);
+    
+    console.log(`[EMAIL] ✅ SUCCESS: Email sent to ${to}`);
+    console.log(`[EMAIL] Message ID: ${info.messageId}`);
+    console.log(`[EMAIL] Response: ${info.response}`);
     return info;
   } catch (error) {
-    console.error(`[EMAIL] Error sending email to ${to}:`, error.message);
+    console.error(`[EMAIL] ❌ FAILED to send email to ${to}`);
+    console.error(`[EMAIL] Error name: ${error.name}`);
+    console.error(`[EMAIL] Error message: ${error.message}`);
+    console.error(`[EMAIL] Error code: ${error.code}`);
+    console.error(`[EMAIL] Full error:`, error);
     throw error;
   }
 };

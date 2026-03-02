@@ -49,19 +49,25 @@ const register = async (req, res, next) => {
     console.log(`[REGISTER] Setting verification token`);
     await User.setVerificationToken(newUser.id, token, expiresAt);
 
-    // Send verification email (non-blocking - don't wait for it)
+    // Send verification email (wait for it with timeout)
     try {
-      console.log('[REGISTER] Sending verification email in background');
+      console.log('[REGISTER] Attempting to send verification email');
       const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}`;
-      console.log(`[REGISTER] Verification URL: ${verificationUrl}`);
-      // Fire and forget - send email async without blocking registration
-      sendVerificationEmail(email, token, verificationUrl).catch(err => {
-        console.error(`[REGISTER] Failed to send verification email to ${email}:`, err.message);
-      });
-      console.log(`[REGISTER] Verification email queued for: ${email}`);
+      console.log(`[REGISTER] Verification URL base: ${verificationUrl}`);
+      
+      // Wait for email with timeout
+      const emailPromise = sendVerificationEmail(email, token, verificationUrl);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Email send timeout after 15 seconds')), 15000)
+      );
+      
+      await Promise.race([emailPromise, timeoutPromise]);
+      console.log(`[REGISTER] Verification email sent successfully to: ${email}`);
     } catch (emailError) {
-      console.error(`[REGISTER] Error queuing verification email for ${email}:`, emailError.message);
-      // Don't block registration even if email queueing fails
+      console.error(`[REGISTER] Failed to send verification email to ${email}:`, emailError.message);
+      // Log more details for debugging
+      console.error('[REGISTER] Error details:', emailError.toString());
+      // Don't block registration even if email fails
     }
 
     console.log(`[REGISTER] Registration successful for: ${email}`);
