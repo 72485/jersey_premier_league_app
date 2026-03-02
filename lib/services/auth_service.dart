@@ -41,7 +41,7 @@ class AuthService {
         url,
         headers: headers,
         body: json.encode(body),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         // Explicitly cast to Map<String, dynamic> for safety
@@ -98,7 +98,7 @@ class AuthService {
   Future<void> register(String name, String email, String password) async {
     try {
       // Backend must handle: 1. User creation (unverified), 2. Email verification sending.
-      await _post(
+      final response = await _post(
         '/api/register',
         {
           'name': name,
@@ -106,15 +106,23 @@ class AuthService {
           'password': password,
         },
       );
-      // Success means the user account is created and the email is sent.
+      // Success means the user account is created
+      debugPrint('Registration successful: $response');
       return;
 
+    } on TimeoutException {
+      debugPrint('Registration Error: Request timed out');
+      throw Exception('Registration is taking too long. Please check your internet connection and try again.');
     } catch (e) {
       debugPrint('Registration Error: $e');
-      if (e.toString().contains('User with this email already exists')) {
+      if (e.toString().contains('EMAIL_EXISTS') || e.toString().contains('already exists')) {
         throw Exception('An account with this email already exists.');
       }
-      throw Exception('Registration failed.');
+      // Re-throw the actual error message instead of generic one
+      if (e is Exception) {
+        rethrow;
+      }
+      throw Exception('Registration failed: ${e.toString()}');
     }
   }
 

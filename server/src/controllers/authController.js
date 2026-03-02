@@ -40,18 +40,21 @@ const register = async (req, res, next) => {
     const { token, expiresAt } = generateVerificationToken();
     await User.setVerificationToken(newUser.id, token, expiresAt);
 
-    // Send verification email
+    // Auto-verify email for development (remove this line for prod with email verification)
+    await User.verifyUserEmail(newUser.id);
+
+    // Send verification email (optional, doesn't block registration)
     try {
       const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}`;
       await sendVerificationEmail(email, token, verificationUrl);
     } catch (emailError) {
       console.error('Failed to send verification email:', emailError);
-      // Don't fail the registration if email fails, user can request it later
+      // Email failure doesn't block registration in development
     }
 
     return res.status(201).json({
       success: true,
-      message: 'User registered successfully. Please check your email to verify your account.',
+      message: 'User registered successfully. You can now login!',
       data: {
         id: newUser.id,
         email: newUser.email,
