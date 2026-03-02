@@ -17,8 +17,8 @@ class Result {
 // -----------------------------------------------------------
 
 
-// 🔑 LOCAL DEVELOPMENT: Points to your local Express backend
-const String _baseUrl = 'http://localhost:5000';
+// 🔑 PRODUCTION: Points to Render backend
+const String _baseUrl = 'https://jerseypremierleague-api.onrender.com';
 
 class AuthService {
   final ValueNotifier<User?> currentUserNotifier = ValueNotifier(null);
