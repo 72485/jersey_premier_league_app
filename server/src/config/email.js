@@ -15,6 +15,22 @@ if (process.env.EMAIL_SERVICE === 'gmail') {
       user: process.env.EMAIL_FROM,
       pass: process.env.EMAIL_APP_PASSWORD,
     },
+    pool: true,
+    maxConnections: 1,
+    maxMessages: 5,
+    rateDelta: 1000,
+    rateLimit: 5,
+    connectionTimeout: 10000,
+    socketTimeout: 10000,
+  });
+  
+  // Verify transporter connection
+  transporter.verify((error, success) => {
+    if (error) {
+      console.error('[EMAIL] ❌ Gmail transporter verification failed:', error.message);
+    } else {
+      console.log('[EMAIL] ✅ Gmail transporter verified and ready');
+    }
   });
 } else {
   console.log('[EMAIL] Configuring generic SMTP transporter');
@@ -54,7 +70,7 @@ const sendEmail = async (to, subject, html) => {
     const info = await Promise.race([
       transporter.sendMail(mailOptions),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Email send timeout after 10 seconds')), 10000)
+        setTimeout(() => reject(new Error('Email send timeout after 20 seconds')), 20000)
       )
     ]);
     
@@ -79,7 +95,10 @@ const sendEmail = async (to, subject, html) => {
  * @param {string} baseUrl - Frontend base URL
  */
 const sendVerificationEmail = async (email, token, baseUrl) => {
+  console.log('[EMAIL] sendVerificationEmail called');
   const verificationLink = `${baseUrl}/verify-email?token=${token}`;
+  console.log(`[EMAIL] Verification link: ${verificationLink}`);
+  
   const html = `
     <h2>Welcome to Jersey Premier League!</h2>
     <p>Please verify your email to activate your account.</p>
@@ -89,9 +108,11 @@ const sendVerificationEmail = async (email, token, baseUrl) => {
       </a>
     </p>
     <p>Or copy this link: ${verificationLink}</p>
+    <p><strong>Verification Token:</strong> ${token}</p>
     <p>This link expires in 6 hours.</p>
   `;
 
+  console.log('[EMAIL] Calling sendEmail for verification...');
   return sendEmail(email, 'Verify your Jersey Premier League account', html);
 };
 
