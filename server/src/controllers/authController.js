@@ -114,8 +114,10 @@ const verifyEmail = async (req, res, next) => {
  */
 const login = async (req, res, next) => {
   try {
+    console.log('[LOGIN] Login attempt started.');
     const { error, value } = validateLogin(req.body);
     if (error) {
+      console.log('[LOGIN] ❌ Validation failed:', error.details[0].message);
       return res.status(400).json({
         success: false,
         error: error.details[0].message,
@@ -124,39 +126,50 @@ const login = async (req, res, next) => {
     }
 
     const { email, password } = value;
+    console.log(`[LOGIN] Attempting to find user: ${email}`);
 
     // Find user
     const user = await User.findUserByEmail(email);
     if (!user) {
+      console.log(`[LOGIN] ❌ User not found: ${email}`);
       return res.status(401).json({
         success: false,
         error: 'Invalid email or password',
         code: 'INVALID_CREDENTIALS',
       });
     }
+    console.log(`[LOGIN] ✅ User found: ${email}`);
 
     // Compare passwords
+    console.log(`[LOGIN] Comparing password for: ${email}`);
     const isPasswordValid = await User.comparePassword(password, user.password_hash);
     if (!isPasswordValid) {
+      console.log(`[LOGIN] ❌ Invalid password for: ${email}`);
       return res.status(401).json({
         success: false,
         error: 'Invalid email or password',
         code: 'INVALID_CREDENTIALS',
       });
     }
+    console.log(`[LOGIN] ✅ Password is valid for: ${email}`);
 
     // Generate token
+    console.log(`[LOGIN] Generating token for: ${email}`);
     const token = generateAuthToken(user.id, user.email);
 
-    return res.json({
+    const responsePayload = {
       success: true,
       message: 'Login successful',
       data: {
         user: User.formatUserResponse(user),
         token,
       },
-    });
+    };
+
+    console.log(`[LOGIN] ✅ Sending successful login response for: ${email}`);
+    return res.json(responsePayload);
   } catch (error) {
+    console.error('[LOGIN] 🚨 An unexpected error occurred:', error);
     next(error);
   }
 };
