@@ -19,11 +19,11 @@ services:
       - key: FRONTEND_URL
         value: https://jerseypremierleague-web.onrender.com
       - key: EMAIL_SERVICE
-        value: gmail
+        value: sendgrid
       - key: EMAIL_FROM
         value: rahulelsharaawy@gmail.com
-      - key: EMAIL_APP_PASSWORD
-        value: jubqfncmzhjczkrs
+      - key: SENDGRID_API_KEY
+        sync: false
       - key: GOOGLE_CLIENT_ID
         value: 1017396303090-5no4v1s8j7hdl158cktde84bapjc9u2q.apps.googleusercontent.com
       - key: ADMIN_EMAILS

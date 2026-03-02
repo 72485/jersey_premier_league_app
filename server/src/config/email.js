@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const sgTransport = require('nodemailer-sendgrid-transport');
 require('dotenv').config();
 
 let transporter;
@@ -8,13 +9,41 @@ console.log('[EMAIL] Service:', process.env.EMAIL_SERVICE);
 console.log('[EMAIL] From:', process.env.EMAIL_FROM);
 
 // Configure based on email service
-if (process.env.EMAIL_SERVICE === 'gmail') {
+if (process.env.EMAIL_SERVICE === 'sendgrid') {
+  console.log('[EMAIL] Setting up SendGrid transporter');
+  
+  try {
+    transporter = nodemailer.createTransport(
+      sgTransport({
+        auth: {
+          api_key: process.env.SENDGRID_API_KEY,
+        },
+      })
+    );
+    console.log('[EMAIL] ✅ SendGrid transporter created successfully');
+  } catch (error) {
+    console.error('[EMAIL] ❌ Failed to create SendGrid transporter:', error.message);
+  }
+  
+  // Test connection asynchronously (don't block startup)
+  setTimeout(() => {
+    console.log('[EMAIL] Testing SendGrid connection...');
+    transporter.verify((error, success) => {
+      if (error) {
+        console.error('[EMAIL] ❌ SendGrid connection test failed:', error.message);
+      } else if (success) {
+        console.log('[EMAIL] ✅ SendGrid connection verified and ready');
+      }
+    });
+  }, 2000);
+  
+} else if (process.env.EMAIL_SERVICE === 'gmail') {
   console.log('[EMAIL] Setting up Gmail transporter');
   
   transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 587,
-    secure: false, // Use STARTTLS instead of SSL
+    secure: false,
     auth: {
       user: process.env.EMAIL_FROM,
       pass: process.env.EMAIL_APP_PASSWORD,
@@ -25,19 +54,16 @@ if (process.env.EMAIL_SERVICE === 'gmail') {
     debug: false,
   });
   
-  // Test connection asynchronously (don't block startup)
   setTimeout(() => {
     console.log('[EMAIL] Testing Gmail connection...');
     transporter.verify((error, success) => {
       if (error) {
         console.error('[EMAIL] ❌ Gmail connection test failed:', error.message);
-        console.error('[EMAIL] Error code:', error.code);
-        console.error('[EMAIL] Response code:', error.responseCode);
       } else if (success) {
         console.log('[EMAIL] ✅ Gmail connection verified and ready');
       }
     });
-  }, 2000); // Wait 2 seconds after startup to test
+  }, 2000);
   
 } else {
   console.log('[EMAIL] Setting up generic SMTP transporter');
