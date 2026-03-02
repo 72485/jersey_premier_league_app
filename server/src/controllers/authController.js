@@ -145,15 +145,6 @@ const login = async (req, res, next) => {
       });
     }
 
-    // Check if email is verified
-    if (!user.is_email_verified) {
-      return res.status(403).json({
-        success: false,
-        error: 'Email not verified. Please check your email for verification link.',
-        code: 'EMAIL_NOT_VERIFIED',
-      });
-    }
-
     // Generate token
     const token = generateAuthToken(user.id, user.email);
 
