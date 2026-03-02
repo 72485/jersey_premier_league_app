@@ -38,11 +38,17 @@ const register = async (req, res, next) => {
     const passwordHash = await User.hashPassword(password);
 
     // Create user
-    console.log(`[REGISTER] Creating user: ${email}`);
-    const newUser = await User.createUser(email, passwordHash, name);
-    console.log(`[REGISTER] User created with ID: ${newUser.id}`);
+    console.log('[REGISTER] Creating user:', email);
+    const newUser = await User.create({ email, password: passwordHash, name });
+    console.log('[REGISTER] User created with ID:', newUser.id);
 
-    // Generate verification token
+    // Auto-verify the user's email to bypass email sending issues for now
+    console.log('[REGISTER] Auto-verifying user email for ID:', newUser.id);
+    await User.verifyUserEmail(newUser.id);
+    console.log('[REGISTER] User email auto-verified.');
+
+    // Generate verification token and send email in the background
+    // This part will still run but won't block login
     console.log('[REGISTER] Generating verification token');
     const { token, expiresAt } = generateVerificationToken();
     
