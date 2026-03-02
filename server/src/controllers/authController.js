@@ -49,27 +49,25 @@ const register = async (req, res, next) => {
     console.log(`[REGISTER] Setting verification token`);
     await User.setVerificationToken(newUser.id, token, expiresAt);
 
-    // Auto-verify email for development (remove this line for prod with email verification)
-    console.log(`[REGISTER] Auto-verifying email for user: ${newUser.id}`);
-    await User.verifyUserEmail(newUser.id);
-    console.log(`[REGISTER] Email verified for user: ${newUser.id}`);
-
-    // Send verification email (optional, doesn't block registration)
+    // Send verification email (non-blocking - don't wait for it)
     try {
-      console.log('[REGISTER] Attempting to send verification email');
+      console.log('[REGISTER] Sending verification email in background');
       const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}`;
       console.log(`[REGISTER] Verification URL: ${verificationUrl}`);
-      await sendVerificationEmail(email, token, verificationUrl);
-      console.log(`[REGISTER] Verification email sent to: ${email}`);
+      // Fire and forget - send email async without blocking registration
+      sendVerificationEmail(email, token, verificationUrl).catch(err => {
+        console.error(`[REGISTER] Failed to send verification email to ${email}:`, err.message);
+      });
+      console.log(`[REGISTER] Verification email queued for: ${email}`);
     } catch (emailError) {
-      console.error(`[REGISTER] Failed to send verification email to ${email}:`, emailError.message);
-      // Email failure doesn't block registration in development
+      console.error(`[REGISTER] Error queuing verification email for ${email}:`, emailError.message);
+      // Don't block registration even if email queueing fails
     }
 
     console.log(`[REGISTER] Registration successful for: ${email}`);
     return res.status(201).json({
       success: true,
-      message: 'User registered successfully. You can now login!',
+      message: 'User registered successfully. Please check your email to verify your account.',
       data: {
         id: newUser.id,
         email: newUser.email,

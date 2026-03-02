@@ -41,7 +41,7 @@ class AuthService {
         url,
         headers: headers,
         body: json.encode(body),
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 60)); // Increased to 60s for Render cold starts
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         // Explicitly cast to Map<String, dynamic> for safety
@@ -128,6 +128,29 @@ class AuthService {
 
   Future<User?> signInAsGuest() async {
     throw Exception('Guest login not yet implemented on the real API.');
+  }
+
+  // 🔑 NEW METHOD: Verify user email with token
+  Future<void> verifyEmail(String token) async {
+    try {
+      await _post(
+        '/api/email/verify',
+        {
+          'token': token,
+        },
+      );
+      debugPrint('Email verification successful');
+      return;
+    } catch (e) {
+      debugPrint('Email Verification Error: $e');
+      if (e.toString().contains('INVALID_TOKEN')) {
+        throw Exception('Invalid or expired verification token');
+      }
+      if (e.toString().contains('TOKEN_EXPIRED')) {
+        throw Exception('Verification token has expired');
+      }
+      throw Exception('Email verification failed: ${e.toString()}');
+    }
   }
 
   Future<void> signOut() async {

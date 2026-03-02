@@ -7,6 +7,8 @@ typedef GoogleSignInCallback = Future<User?> Function();
 typedef GoToRegisterCallback = VoidCallback;
 // 🆕 NEW: Callback for successful admin login
 typedef AdminLoginCallback = VoidCallback;
+// 🆕 NEW: Callback for verify email
+typedef GoToVerifyEmailCallback = VoidCallback;
 
 
 class LoginPage extends StatefulWidget {
@@ -14,6 +16,7 @@ class LoginPage extends StatefulWidget {
   final GoogleSignInCallback onGoogleSignIn;
   final GoToRegisterCallback onGoToRegister;
   final AdminLoginCallback onAdminLogin; // 🆕 NEW: Admin login callback
+  final GoToVerifyEmailCallback onGoToVerifyEmail; // 🆕 NEW: Verify email callback
   final bool isLoading;
 
   const LoginPage({
@@ -23,6 +26,7 @@ class LoginPage extends StatefulWidget {
     required this.isLoading,
     required this.onGoToRegister,
     required this.onAdminLogin, // 🆕 NEW: Added to constructor to fix main.dart error
+    required this.onGoToVerifyEmail, // 🆕 NEW: Added for verify email navigation
   });
 
   @override
@@ -94,29 +98,19 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _attemptGoogleLogin() async {
-    if (widget.isLoading || _localLoading) return;
-
     setState(() {
       _errorMessage = null;
-      _localLoading = true;
     });
 
-    try {
-      await widget.onGoogleSignIn();
-      // Admin check for Google Sign-In is implicitly handled by the parent
-      // widget (main.dart) upon successful login and subsequent routing.
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = "Google sign-in failed: ${e.toString()}";
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _localLoading = false;
-        });
-      }
+    // Show Coming Soon message
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Google Sign-in coming soon! Please use email and password for now.'),
+          duration: Duration(seconds: 3),
+          backgroundColor: Colors.orange,
+        ),
+      );
     }
   }
 
@@ -210,21 +204,21 @@ class _LoginPageState extends State<LoginPage> {
               const Text('OR', style: TextStyle(color: Colors.black54), textAlign: TextAlign.center),
               const SizedBox(height: 20),
 
-              // Google Login Button
+              // Google Login Button (Coming Soon)
               OutlinedButton.icon(
-                onPressed: combinedLoading ? null : _attemptGoogleLogin,
+                onPressed: _attemptGoogleLogin,
                 icon: Icon(
                   Icons.g_mobiledata_outlined,
-                  color: themePrimaryColor,
+                  color: Colors.grey,
                   size: 30,
                 ),
-                label: Text(
-                  'Login with Google',
-                  style: TextStyle(fontSize: 16, color: themePrimaryColor),
+                label: const Text(
+                  'Login with Google (Coming Soon)',
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
                 ),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 50),
-                  backgroundColor: Colors.white,
+                  backgroundColor: Colors.grey[100],
                 ),
               ),
               const SizedBox(height: 20),
@@ -233,6 +227,12 @@ class _LoginPageState extends State<LoginPage> {
               TextButton(
                 onPressed: combinedLoading ? null : widget.onGoToRegister,
                 child: Text("Don't have an account? Register", style: TextStyle(color: themePrimaryColor)),
+              ),
+              
+              // 🆕 NEW: Go to Verify Email
+              TextButton(
+                onPressed: combinedLoading ? null : widget.onGoToVerifyEmail,
+                child: Text('Need to verify your email?', style: TextStyle(color: themePrimaryColor, fontSize: 14)),
               ),
             ],
           ),

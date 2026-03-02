@@ -106,7 +106,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         Icon(Icons.email, size: 60, color: themePrimaryColor),
                         const SizedBox(height: 10),
                         const Text(
-                          'Success! Please verify your email.',
+                          'Account Created!',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                               fontSize: 18,
@@ -116,9 +116,15 @@ class _RegisterPageState extends State<RegisterPage> {
                         ),
                         const SizedBox(height: 5),
                         const Text(
-                          'You are being redirected to the login page.',
+                          'Check your email for a verification link or token.',
                           textAlign: TextAlign.center,
                           style: TextStyle(fontSize: 14, color: Colors.black54),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'You\'ll be redirected to login in a moment.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
                         ),
                       ],
                     ),
