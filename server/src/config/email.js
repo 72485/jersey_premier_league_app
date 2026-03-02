@@ -33,16 +33,22 @@ if (process.env.EMAIL_SERVICE === 'gmail') {
  */
 const sendEmail = async (to, subject, html) => {
   try {
-    const info = await transporter.sendMail({
-      from: process.env.EMAIL_FROM,
-      to,
-      subject,
-      html,
-    });
-    console.log('Email sent:', info.messageId);
+    console.log(`[EMAIL] Sending email to: ${to}`);
+    const info = await Promise.race([
+      transporter.sendMail({
+        from: process.env.EMAIL_FROM,
+        to,
+        subject,
+        html,
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Email send timeout after 10 seconds')), 10000)
+      )
+    ]);
+    console.log(`[EMAIL] Email sent successfully to ${to}:`, info.messageId);
     return info;
   } catch (error) {
-    console.error('Email sending error:', error);
+    console.error(`[EMAIL] Error sending email to ${to}:`, error.message);
     throw error;
   }
 };
