@@ -49,24 +49,22 @@ const register = async (req, res, next) => {
     console.log(`[REGISTER] Setting verification token`);
     await User.setVerificationToken(newUser.id, token, expiresAt);
 
-    // Send verification email (wait for it with timeout)
+    // Send verification email (wait for it with extended timeout)
     try {
       console.log('[REGISTER] Attempting to send verification email');
       const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}`;
       console.log(`[REGISTER] Verification URL base: ${verificationUrl}`);
       
-      // Wait for email with timeout
+      // Wait for email with 30 second timeout (Render can be slow)
       const emailPromise = sendVerificationEmail(email, token, verificationUrl);
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Email send timeout after 15 seconds')), 15000)
+        setTimeout(() => reject(new Error('Email send timeout after 30 seconds')), 30000)
       );
       
       await Promise.race([emailPromise, timeoutPromise]);
-      console.log(`[REGISTER] Verification email sent successfully to: ${email}`);
+      console.log(`[REGISTER] ✅ Verification email sent successfully to: ${email}`);
     } catch (emailError) {
-      console.error(`[REGISTER] Failed to send verification email to ${email}:`, emailError.message);
-      // Log more details for debugging
-      console.error('[REGISTER] Error details:', emailError.toString());
+      console.error(`[REGISTER] ⚠️ Failed to send verification email to ${email}:`, emailError.message);
       // Don't block registration even if email fails
     }
 

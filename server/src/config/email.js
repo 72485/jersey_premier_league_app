@@ -3,40 +3,47 @@ require('dotenv').config();
 
 let transporter;
 
+console.log('[EMAIL] Initializing email transporter...');
+console.log('[EMAIL] Service:', process.env.EMAIL_SERVICE);
+console.log('[EMAIL] From:', process.env.EMAIL_FROM);
+
 // Configure based on email service
 if (process.env.EMAIL_SERVICE === 'gmail') {
-  console.log('[EMAIL] Configuring Gmail transporter');
-  console.log('[EMAIL] Email From:', process.env.EMAIL_FROM);
-  console.log('[EMAIL] Email Password Set:', !!process.env.EMAIL_APP_PASSWORD);
+  console.log('[EMAIL] Setting up Gmail transporter');
   
   transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // Use STARTTLS instead of SSL
     auth: {
       user: process.env.EMAIL_FROM,
       pass: process.env.EMAIL_APP_PASSWORD,
     },
-    pool: true,
-    maxConnections: 1,
-    maxMessages: 5,
-    rateDelta: 1000,
-    rateLimit: 5,
-    connectionTimeout: 10000,
-    socketTimeout: 10000,
+    connectionTimeout: 15000,
+    socketTimeout: 15000,
+    logger: false,
+    debug: false,
   });
   
-  // Verify transporter connection
-  transporter.verify((error, success) => {
-    if (error) {
-      console.error('[EMAIL] ❌ Gmail transporter verification failed:', error.message);
-    } else {
-      console.log('[EMAIL] ✅ Gmail transporter verified and ready');
-    }
-  });
+  // Test connection asynchronously (don't block startup)
+  setTimeout(() => {
+    console.log('[EMAIL] Testing Gmail connection...');
+    transporter.verify((error, success) => {
+      if (error) {
+        console.error('[EMAIL] ❌ Gmail connection test failed:', error.message);
+        console.error('[EMAIL] Error code:', error.code);
+        console.error('[EMAIL] Response code:', error.responseCode);
+      } else if (success) {
+        console.log('[EMAIL] ✅ Gmail connection verified and ready');
+      }
+    });
+  }, 2000); // Wait 2 seconds after startup to test
+  
 } else {
-  console.log('[EMAIL] Configuring generic SMTP transporter');
+  console.log('[EMAIL] Setting up generic SMTP transporter');
   transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
-    port: process.env.SMTP_PORT,
+    port: process.env.SMTP_PORT || 587,
     secure: process.env.SMTP_SECURE === 'true',
     auth: {
       user: process.env.SMTP_USER,
@@ -53,11 +60,9 @@ if (process.env.EMAIL_SERVICE === 'gmail') {
  */
 const sendEmail = async (to, subject, html) => {
   try {
-    console.log(`[EMAIL] === Starting email send ===`);
+    console.log(`[EMAIL] === Sending email ===`);
     console.log(`[EMAIL] To: ${to}`);
-    console.log(`[EMAIL] Subject: ${subject}`);
-    console.log(`[EMAIL] From: ${process.env.EMAIL_FROM || 'NOT SET'}`);
-    console.log(`[EMAIL] Service: ${process.env.EMAIL_SERVICE || 'NOT SET'}`);
+    console.log(`[EMAIL] Subject: ${subject.substring(0, 50)}...`);
     
     const mailOptions = {
       from: process.env.EMAIL_FROM,
@@ -66,24 +71,26 @@ const sendEmail = async (to, subject, html) => {
       html,
     };
     
-    console.log('[EMAIL] Calling transporter.sendMail...');
-    const info = await Promise.race([
-      transporter.sendMail(mailOptions),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Email send timeout after 20 seconds')), 20000)
-      )
-    ]);
+    console.log('[EMAIL] Calling transporter.sendMail()...');
+    let timeout = setTimeout(() => {
+      console.error('[EMAIL] ⏱️ Email send is taking too long (>25s)');
+    }, 25000);
     
+    const info = await transporter.sendMail(mailOptions);
+    
+    clearTimeout(timeout);
     console.log(`[EMAIL] ✅ SUCCESS: Email sent to ${to}`);
     console.log(`[EMAIL] Message ID: ${info.messageId}`);
-    console.log(`[EMAIL] Response: ${info.response}`);
     return info;
   } catch (error) {
     console.error(`[EMAIL] ❌ FAILED to send email to ${to}`);
     console.error(`[EMAIL] Error name: ${error.name}`);
     console.error(`[EMAIL] Error message: ${error.message}`);
     console.error(`[EMAIL] Error code: ${error.code}`);
-    console.error(`[EMAIL] Full error:`, error);
+    console.error(`[EMAIL] Response code: ${error.responseCode}`);
+    if (error.response) {
+      console.error(`[EMAIL] SMTP Response: ${error.response}`);
+    }
     throw error;
   }
 };
