@@ -1,11 +1,12 @@
 services:
   - type: web
-    name: jersey-premier-league-api
+    name: jerseypremierleague-api
     env: node
     region: oregon
     plan: free
-    buildCommand: cd server && npm install
-    startCommand: cd server && node src/server.js
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node src/server.js
     envVars:
       - key: NODE_ENV
         value: production
