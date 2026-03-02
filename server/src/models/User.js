@@ -169,11 +169,12 @@ const comparePassword = async (password, hash) => {
  * Get user without sensitive data (for API response)
  */
 const formatUserResponse = (user) => {
+  if (!user) return null;
   return {
     id: user.id,
     email: user.email,
     name: user.name,
-    fpl_team_id: user.fpl_team_id,
+    fpl_team_id: user.fpl_team_id || 0, // 🐛 FIX: Coalesce null fpl_team_id to 0
     is_email_verified: user.is_email_verified,
   };
 };
