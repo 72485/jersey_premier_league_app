@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:jersey_premier_league/models/user_model.dart';
+// 🔑 CRITICAL DEPENDENCY: This import brings in the AuthService class AND the external Result class definition.
 import 'package:jersey_premier_league/services/auth_service.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -36,7 +37,7 @@ class _ProfilePageState extends State<ProfilePage> {
     super.initState();
     // Initialize controllers with current user data
     _nameController = TextEditingController(text: widget.user.name);
-    _fplTeamIdController = TextEditingController(text: widget.user.fpl_team_ID);
+    _fplTeamIdController = TextEditingController(text: widget.user.fpl_team_id);
   }
 
   @override
@@ -63,14 +64,16 @@ class _ProfilePageState extends State<ProfilePage> {
       return;
     }
 
-    // Check if any value has actually changed before proceeding
+    // 1. Trim the new values from controllers
     final newName = _nameController.text.trim();
-    final newFplTeamId = _fplTeamIdController.text.trim();
+    final String fplIdTrimmed = _fplTeamIdController.text.trim();
 
-    // The FPL Team ID is considered the same if it matches the current user's ID
-    // or if the trimmed text matches
+    // Explicitly map the empty string to null (since the model field is String?)
+    final String? newFplTeamId = fplIdTrimmed.isNotEmpty ? fplIdTrimmed : null;
+
+    // 2. Check if any value has actually changed before proceeding
     final isNameUnchanged = newName == widget.user.name;
-    final isFplIdUnchanged = newFplTeamId == (widget.user.fpl_team_ID ?? '');
+    final isFplIdUnchanged = newFplTeamId == widget.user.fpl_team_id;
 
     if (isNameUnchanged && isFplIdUnchanged) {
       _showSnackBar('No changes detected.');
@@ -84,37 +87,56 @@ class _ProfilePageState extends State<ProfilePage> {
     // Create a new User object with the updated details
     final updatedUser = widget.user.copyWith(
       name: newName,
-      fpl_team_ID: newFplTeamId,
+      fpl_team_id: newFplTeamId,
     );
 
     try {
-      // 🚨 Service call to update the user in the backend
+      // Service call updates the database AND the currentUserNotifier.value
       final result = await widget.authService.updateUser(updatedUser);
 
-      if (result.success) {
-        // Success: Notify the user and update the parent widget's state if possible,
-        // (though in a real app, the auth service would typically handle state update)
-        _showSnackBar('Profile updated successfully!');
-      } else {
-        // Handle specific error case for duplicate FPL Team ID
-        if (result.message.contains('FPL_TEAM_ID_EXISTS')) {
-          _showSnackBar(
-            'This FPL Team ID is already in use by another user.',
-            isError: true,
-          );
+      if (mounted) {
+        if (result.success) {
+          // 🔑 CRITICAL FIX START: Read the latest data from the central state
+          final latestUser = widget.authService.currentUserNotifier.value;
+
+          if (latestUser != null) {
+            // 🔑 CRITICAL FIX 1: Update the name controller with the new (trimmed) name
+            _nameController.text = latestUser.name;
+
+            // 🔑 CRITICAL FIX 2: Update the FPL ID controller with the new FPL Team ID
+            // This is the saved value from the database (may be null/empty string)
+            _fplTeamIdController.text = latestUser.fpl_team_id ?? '';
+          }
+          // 🔑 CRITICAL FIX END
+
+          _showSnackBar('Profile updated successfully!');
+
         } else {
-          _showSnackBar(
-            'Failed to update profile: ${result.message}',
-            isError: true,
-          );
+          // Handle specific error case for duplicate FPL Team ID (or others)
+          if (result.message.contains('FPL Team ID is already in use by another account')) {
+            _showSnackBar(
+              'This FPL Team ID is already in use by another user.',
+              isError: true,
+            );
+          } else {
+            _showSnackBar(
+              'Failed to update profile: ${result.message}',
+              isError: true,
+            );
+          }
         }
       }
     } catch (e) {
-      _showSnackBar('An unexpected error occurred.', isError: true);
+      // Catch network or unhandled errors
+      if (mounted) {
+        _showSnackBar('An unexpected error occurred.', isError: true);
+      }
     } finally {
-      setState(() {
-        _isSaving = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
     }
   }
 

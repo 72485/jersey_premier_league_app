@@ -127,7 +127,7 @@ class _JPLNavigationWrapperState extends State<JPLNavigationWrapper> {
   void initState() {
     super.initState();
 
-    final fplTeamId = int.tryParse(widget.user.fpl_team_ID ?? '') ?? 0;
+    final fplTeamId = int.tryParse(widget.user.fpl_team_id ?? '') ?? 0;
 
     // Initialize the list of pages
     _pages = <Widget>[

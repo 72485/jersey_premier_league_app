@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:jersey_premier_league/models/user_model.dart';
-import 'package:jersey_premier_league/services/auth_service.dart';
+import 'package:jersey_premier_league/services/auth_service.dart'; // Ensure Result is defined here
 
 class TeamSetupPage extends StatefulWidget {
   final User user;
-  final AuthService authService; // **Fix for Error 2: 'authService' isn't defined.**
-  // Note: The old 'onTeamIdSaved' is removed to fix Error 1.
+  final AuthService authService;
+  // Note: The old 'onTeamIdSaved' is removed as the app flow now relies on
+  // the main App builder detecting the fpl_team_ID update via the ValueNotifier.
 
   const TeamSetupPage({
     super.key,
@@ -30,14 +31,42 @@ class _TeamSetupPageState extends State<TeamSetupPage> {
         _errorMessage = null;
       });
 
-      try {
-        // Use the AuthService to update the ID via the mocked API
-        await widget.authService.updateFplTeamID(widget.user, _teamIdController.text);
+      // 1. Create a User object with the updated FPL Team ID.
+      final String fplIdInput = _teamIdController.text.trim();
 
-        // Success: The user stream in main.dart will update the state
+      // 🔑 CRITICAL FIX: Ensure an empty string is mapped to null,
+      // although the validator should prevent an empty string here.
+      final String? newFplTeamId = fplIdInput.isNotEmpty ? fplIdInput : null;
+
+      final updatedUser = widget.user.copyWith(
+        fpl_team_id: newFplTeamId, // Pass the now correctly-nullable value
+        name: widget.user.name, // Ensure name is preserved
+      );
+
+      try {
+        // 2. Use the updated method: updateUser which returns a Result object.
+        final result = await widget.authService.updateFplTeamID(newFplTeamId);
+
+        if (!result.success) {
+          // 3. Handle specific error cases from the Result object.
+          String errorMsg = 'Failed to save ID. Please try again.';
+
+          if (result.message.contains('FPL_TEAM_ID_EXISTS')) {
+            errorMsg = 'This FPL Team ID is already in use by another user.';
+          } else if (result.message.isNotEmpty) {
+            errorMsg = result.message.replaceFirst('Exception: ', '');
+          }
+
+          setState(() {
+            _errorMessage = errorMsg;
+          });
+        }
+        // If successful (result.success is true), the main.dart ValueListenableBuilder
+        // will detect the user change and navigate away from this page.
+
       } catch (e) {
         setState(() {
-          _errorMessage = 'Failed to save ID. Please try again.';
+          _errorMessage = 'An unexpected error occurred: ${e.toString()}';
         });
       } finally {
         if (mounted) {
@@ -49,7 +78,6 @@ class _TeamSetupPageState extends State<TeamSetupPage> {
 
   @override
   Widget build(BuildContext context) {
-    // REMOVE: const Color primaryColor = Color(0xFF1E88E5);
     final themePrimaryColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
@@ -89,6 +117,7 @@ class _TeamSetupPageState extends State<TeamSetupPage> {
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 16, color: Colors.black54),
                 ),
+                const SizedBox(height: 24),
                 TextFormField(
                   controller: _teamIdController,
                   keyboardType: TextInputType.number,
@@ -100,15 +129,6 @@ class _TeamSetupPageState extends State<TeamSetupPage> {
                     filled: true,
                     fillColor: Colors.white,
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Team ID cannot be empty.';
-                    }
-                    if (int.tryParse(value) == null) {
-                      return 'Please enter a valid number.';
-                    }
-                    return null;
-                  },
                 ),
                 const SizedBox(height: 16),
 

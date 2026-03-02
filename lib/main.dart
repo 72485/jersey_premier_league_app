@@ -9,12 +9,13 @@ import 'package:jersey_premier_league/pages/login_page.dart';
 import 'package:jersey_premier_league/pages/register_page.dart';
 import 'package:jersey_premier_league/pages/team_setup_page.dart';
 
+// Import the real AdminHomePage
+import 'package:jersey_premier_league/pages/admin_home_page.dart';
+
 // Import the wrapper
 import 'package:jersey_premier_league/pages/jpl_navigation_wrapper.dart';
 
-import 'package:jersey_premier_league/pages/profile_page.dart';
-import 'package:jersey_premier_league/pages/change_password_page.dart';
-import 'package:jersey_premier_league/pages/fixtures_page.dart';
+// ... (other imports)
 
 // ⚡ THEME COLORS
 const Color newPrimaryColor = Color(0xFFE91E63); // Dark Pink/Magenta
@@ -38,10 +39,64 @@ void main() {
   runApp(MyApp(authService: authService));
 }
 
+// 🆕 NEW: VerificationPendingPage (Placeholder)
+class VerificationPendingPage extends StatelessWidget {
+  final User user;
+  final VoidCallback onSignOut;
+  const VerificationPendingPage({super.key, required this.user, required this.onSignOut});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Verify Email'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: onSignOut,
+          )
+        ],
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.email, size: 80, color: Color(0xFFE91E63)),
+              const SizedBox(height: 20),
+              const Text(
+                "Verification Required",
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                "A verification link has been sent to ${user.email}. Please click the link to confirm your registration. You will need to log out and back in after verifying.",
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ❌ REMOVED: AdminHomePage placeholder class has been removed.
+
 class MyApp extends StatelessWidget {
   final AuthService authService;
 
   const MyApp({super.key, required this.authService});
+
+  // 🔑 DEFINED: The correct list of admin emails (lowercase for routing check)
+  static const List<String> _adminEmails = [
+    "jerseypremierleaguee@gmail.com",
+    "jpl_admin2@gmail.com",
+    "jpl_admin3@gmail.com",
+    "jpl_admin4@gmail.com",
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -49,30 +104,16 @@ class MyApp extends StatelessWidget {
       title: 'Jersey Premier League',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // Use the new primary color consistently
         primaryColor: newPrimaryColor,
         useMaterial3: true,
-
-        // Set global font family
         fontFamily: 'Inter',
-
-        // Define a vibrant ColorScheme based on the screenshot
         colorScheme: ColorScheme.fromSeed(
           seedColor: newPrimaryColor,
           primary: newPrimaryColor,
           onPrimary: Colors.white,
           secondary: newSecondaryColor,
-          onSecondary: Colors.black,
-          tertiary: newAccentColor,
-          onTertiary: Colors.black,
-          error: Colors.red.shade700,
-          onError: Colors.white,
-          background: Colors.white,
-          onBackground: Colors.black,
-          surface: Colors.white,
-          onSurface: Colors.black,
+          // ... (rest of color scheme)
         ),
-        // Removed AppBarTheme to allow custom gradient on individual pages
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             backgroundColor: newPrimaryColor,
@@ -115,7 +156,6 @@ class MyApp extends StatelessWidget {
           fillColor: newNeutralColor.withOpacity(0.1),
           filled: true,
         ),
-        // ⚡ FIX: Change CardTheme to CardThemeData to match the required type.
         cardTheme: CardThemeData(
           color: newPrimaryColor.withOpacity(0.05),
           elevation: 2,
@@ -128,10 +168,26 @@ class MyApp extends StatelessWidget {
           if (user == null) {
             return AuthFlowPage(authService: authService);
           }
-          if (user.fpl_team_ID == null || user.fpl_team_ID!.isEmpty) {
+
+          // 1. ADMIN ROUTE CHECK (Now using the imported AdminHomePage)
+          if (_adminEmails.contains(user.email.toLowerCase())) {
+            return AdminHomePage(onSignOut: authService.signOut);
+          }
+
+          // 2. EMAIL VERIFICATION CHECK (Only for non-admins)
+          if (user.is_email_verified == false) {
+            return VerificationPendingPage(
+              user: user,
+              onSignOut: authService.signOut,
+            );
+          }
+
+          // 3. FPL TEAM SETUP CHECK (Only for verified non-admins)
+          if (user.fpl_team_id == null || user.fpl_team_id!.isEmpty) {
             return TeamSetupPage(user: user, authService: authService);
           }
-          // ROUTE TO JPLNavigationWrapper
+
+          // 4. NORMAL USER HOME ROUTE (Fully set up)
           return JPLNavigationWrapper(
             user: user,
             authService: authService,
@@ -170,7 +226,13 @@ class _AuthFlowPageState extends State<AuthFlowPage> {
     });
   }
 
-  // ⚡ FIX: Removed the _attemptAdminLogin function entirely.
+  // Simplified Method to handle Admin Login
+  void _goToAdminHome() {
+    // This is correctly designed to do nothing, as the successful login
+    // updates the auth state, which triggers the MyApp builder above
+    // to check the email and route automatically.
+    print('LOG: Admin login successful, MyApp builder will handle routing.');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -180,7 +242,7 @@ class _AuthFlowPageState extends State<AuthFlowPage> {
         onGoogleSignIn: widget.authService.signInWithGoogle,
         isLoading: false,
         onGoToRegister: _goToRegister,
-        // onAdminSignIn parameter remains removed here.
+        onAdminLogin: _goToAdminHome,
       );
     } else {
       return RegisterPage(

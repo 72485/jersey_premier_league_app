@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:jersey_premier_league/models/user_model.dart';
-import 'package:jersey_premier_league/main.dart'; // Import main.dart to access gradient colors
 
 // Update the typedefs to remove the one for admin sign-in (if it existed)
 typedef SignInCallback = Future<User?> Function(String email, String password);
 typedef GoogleSignInCallback = Future<User?> Function();
 typedef GoToRegisterCallback = VoidCallback;
+// 🆕 NEW: Callback for successful admin login
+typedef AdminLoginCallback = VoidCallback;
 
 
 class LoginPage extends StatefulWidget {
   final SignInCallback onSignIn;
   final GoogleSignInCallback onGoogleSignIn;
   final GoToRegisterCallback onGoToRegister;
+  final AdminLoginCallback onAdminLogin; // 🆕 NEW: Admin login callback
   final bool isLoading;
-  // ⚡ FIX: Removed the 'onAdminSignIn' declaration and requirement
-  // final SignInCallback onAdminSignIn; // <-- This line is removed
 
   const LoginPage({
     super.key,
@@ -22,7 +22,7 @@ class LoginPage extends StatefulWidget {
     required this.onGoogleSignIn,
     required this.isLoading,
     required this.onGoToRegister,
-    // required this.onAdminSignIn, // <-- This is removed from the constructor
+    required this.onAdminLogin, // 🆕 NEW: Added to constructor to fix main.dart error
   });
 
   @override
@@ -30,6 +30,15 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
+  // 🔑 CONSTANT: Define the list of admin emails (lowercase for case-insensitive check)
+  // NOTE: This list is now redundant here, as main.dart handles the routing.
+  static const List<String> _adminEmails = [
+    "jerseypremierleaguee@gmail.com",
+    "jpl_admin2@gmail.com",
+    "jpl_admin3@gmail.com",
+    "jpl_admin4@gmail.com",
+  ];
+
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   String? _errorMessage;
@@ -37,7 +46,6 @@ class _LoginPageState extends State<LoginPage> {
 
   // --- Core Login Logic ---
   void _attemptLogin() async {
-    // ... (logic remains the same)
     if (_localLoading) return;
 
     setState(() {
@@ -45,7 +53,10 @@ class _LoginPageState extends State<LoginPage> {
       _localLoading = true;
     });
 
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
       setState(() {
         _errorMessage = "Please enter both email and password.";
         _localLoading = false;
@@ -54,8 +65,17 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     try {
-      final user = await widget.onSignIn(_emailController.text, _passwordController.text);
-      if (user == null) {
+      final user = await widget.onSignIn(email, password);
+
+      if (user != null) {
+        // 🔑 REMOVED ADMIN CHECK: The main.dart builder now handles all subsequent routing
+        // based on the updated `authService.currentUserNotifier`.
+        // The call to `widget.onAdminLogin()` is no longer needed here.
+
+        // If it's a normal user, the parent widget (main.dart) will handle
+        // the verification check and routing based on the 'user' object status.
+
+      } else {
         setState(() {
           _errorMessage = "Invalid email or password.";
         });
@@ -83,6 +103,8 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       await widget.onGoogleSignIn();
+      // Admin check for Google Sign-In is implicitly handled by the parent
+      // widget (main.dart) upon successful login and subsequent routing.
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -97,8 +119,6 @@ class _LoginPageState extends State<LoginPage> {
       }
     }
   }
-
-  // NOTE: If you had a dedicated button/logic for admin login, you must remove it here as well.
 
   @override
   void dispose() {
@@ -119,9 +139,9 @@ class _LoginPageState extends State<LoginPage> {
         elevation: 0,
         flexibleSpace: Container(
           decoration: const BoxDecoration(
-            // Use the gradient colors defined in main.dart
             gradient: LinearGradient(
-              colors: appBarGradientColors,
+              // Using the constant from main.dart
+              colors: [Color(0xFFE91E63), Color(0xFF00BCD4)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),

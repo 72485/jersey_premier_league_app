@@ -1,18 +1,25 @@
-// lib/services/auth_service.dart
+// lib/services/auth_service.dart (Frontend)
 
 import 'package:flutter/foundation.dart';
 import 'package:jersey_premier_league/models/user_model.dart';
-import 'package:http/http.dart' as http; // Official HTTP package for network calls
-import 'dart:convert'; // Required for JSON encoding/decoding
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'dart:async';
-// ⚡ ADD: You need to add 'google_sign_in: ^6.1.0' (or latest) to your pubspec.yaml
 import 'package:google_sign_in/google_sign_in.dart';
 
-// --- Configuration ---
-// IMPORTANT: Reverting to 10.0.2.2 as the backend server is running and accessible
-// only via this address on the Android Emulator.
-const String _baseUrl = 'http://192.168.137.1:8080'; // CORRECT ADDRESS FOR ANDROID EMULATOR
-//const String _baseUrl = 'http://localhost:8080'; //chrome test
+// --- NEW CLASS: Required to match the logic in ProfilePage ---
+class Result {
+  final bool success;
+  final String message;
+
+  Result({required this.success, this.message = ''});
+}
+// -----------------------------------------------------------
+
+
+// 🔑 LOCAL DEVELOPMENT: Points to your local Express backend
+const String _baseUrl = 'http://localhost:5000';
+
 class AuthService {
   final ValueNotifier<User?> currentUserNotifier = ValueNotifier(null);
 
@@ -20,13 +27,11 @@ class AuthService {
   Future<Map<String, dynamic>> _post(
       String endpoint, Map<String, dynamic> body, {String? token}) async {
 
-    final url = Uri.parse('$_baseUrl$endpoint'); // Correct URL construction
-    print(url);
+    final url = Uri.parse('$_baseUrl$endpoint');
     final headers = {
       'Content-Type': 'application/json',
     };
 
-    // Add Authorization header if a token is provided (used for updates/protected routes)
     if (token != null) {
       headers['Authorization'] = 'Bearer $token';
     }
@@ -36,40 +41,40 @@ class AuthService {
         url,
         headers: headers,
         body: json.encode(body),
-      ).timeout(const Duration(seconds: 10)); // Uses TimeoutException
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
+        // Explicitly cast to Map<String, dynamic> for safety
         return json.decode(response.body) as Map<String, dynamic>;
       } else {
-        // Logic to extract specific error message (e.g., "Incorrect current password")
-        String errorMessage = 'An unknown server error occurred.';
-        String errorCode = ''; // Used to send specific codes like FPL_TEAM_ID_EXISTS
+        String errorMessage = 'Request failed with status: ${response.statusCode}';
+        String errorCode = '';
 
         try {
           final errorBody = json.decode(response.body);
           if (errorBody.containsKey('error')) {
-            errorMessage = errorBody['error'] as String;
+            // Extract the error message from the response
+            errorMessage = (errorBody['error'] as String?) ?? 'Server error.';
           }
           if (errorBody.containsKey('code')) {
-            errorCode = errorBody['code'] as String; // Assume backend sends a 'code' like FPL_TEAM_ID_EXISTS
-          } else {
-            errorMessage = 'Request failed with status: ${response.statusCode}';
+            errorCode = errorBody['code'] as String;
           }
         } catch (e) {
-          errorMessage = 'Request failed with status: ${response.statusCode}. Could not parse error details.';
+          // If we can't parse the error body, keep the generic message
+          debugPrint('Error parsing response body: $e');
         }
 
-        // Throw an exception that includes the specific code if available
+        // Throw an exception that includes the most specific error message available
         throw Exception(errorCode.isNotEmpty ? errorCode : errorMessage);
       }
-    } on TimeoutException { // 👈 This will now be recognized
+    } on TimeoutException {
       throw Exception('Network request timed out. Please check your connection.');
     } catch (e) {
       rethrow;
     }
   }
 
-  // ... (signIn, register, signOut methods are unchanged)
+  // Updated to handle 'isEmailVerified' in the User model
   Future<User?> signIn(String email, String password) async {
     try {
       final response = await _post(
@@ -85,15 +90,15 @@ class AuthService {
 
       return user;
     } catch (e) {
-      // The error is handled by the LoginPage and displayed as _errorMessage
       debugPrint('Login Error: $e');
       return null;
     }
   }
 
-  Future<User?> register(String name, String email, String password) async {
+  Future<void> register(String name, String email, String password) async {
     try {
-      final response = await _post(
+      // Backend must handle: 1. User creation (unverified), 2. Email verification sending.
+      await _post(
         '/api/register',
         {
           'name': name,
@@ -101,14 +106,12 @@ class AuthService {
           'password': password,
         },
       );
+      // Success means the user account is created and the email is sent.
+      return;
 
-      final user = User.fromJson(response);
-      currentUserNotifier.value = user;
-
-      return user;
     } catch (e) {
       debugPrint('Registration Error: $e');
-      if (e is Exception && e.toString().contains('409')) {
+      if (e.toString().contains('User with this email already exists')) {
         throw Exception('An account with this email already exists.');
       }
       throw Exception('Registration failed.');
@@ -123,77 +126,135 @@ class AuthService {
     currentUserNotifier.value = null;
   }
 
-  Future<User> updateFplTeamID(User user, String teamId) async {
-    // This old method is now redundant and should be integrated or deprecated.
-    // Keeping it here for now, but the new updateUser should be used.
-    try {
-      final response = await _post(
-        '/api/profile/update',
-        {
-          'fpl_team_ID': teamId,
-          'id': user.id, // ID is often unnecessary if token is used
-        },
-        token: user.token,
-      );
 
-      if (response.containsKey('fpl_team_ID')) {
-        final updatedUser = user.copyWith(fpl_team_ID: response['fpl_team_ID'] as String);
-        currentUserNotifier.value = updatedUser;
-        return updatedUser;
-      }
-      throw Exception('Update response missing FPL ID.');
-    } catch (e) {
-      debugPrint('Update FPL ID Error: $e');
-      throw Exception('Failed to update FPL Team ID.');
+  // 🔑 NEW METHOD: Dedicated function to only update the FPL Team ID
+  Future<Result> updateFplTeamID(String? fplTeamid) async {
+    final currentUser = currentUserNotifier.value;
+    if (currentUser == null) {
+      return Result(success: false, message: 'User not authenticated.');
     }
-  }
 
-  // ⚡ FIX: Renamed from updateProfile and changed return type to Future<Result>
-  Future<Result> updateUser(User user) async {
     try {
-      // 1. Prepare the request body from the incoming User object
+      // 1. Prepare the payload with only the FPL Team ID
       final Map<String, dynamic> body = {
-        // Only include fields that are meant to be updated
-        'name': user.name,
-        'fpl_team_ID': user.fpl_team_ID,
+        'fplTeamID': fplTeamid, // Can be String or null
       };
 
-      // 2. Call the backend API
-      // The backend should handle which fields are actually different and only update those.
+      // 2. Call the new dedicated API endpoint
       final response = await _post(
-        '/api/profile/update',
+        '/api/profile/fpl-team-id',
         body,
-        token: user.token,
+        token: currentUser.token,
       );
 
-      // 3. Update the local User model with the potentially new data
-      //    (The response should ideally return the fully updated user object)
-      //    For simplicity here, we assume the provided 'user' object is the correct updated model.
-
-      // We will assume the backend returns the updated fields for simplicity,
-      // and we merge them with the existing user data.
-      final updatedUser = user.copyWith(
-        name: response['name'] ?? user.name,
-        fpl_team_ID: response['fpl_team_ID'] ?? user.fpl_team_ID,
-      );
-
-      // 4. Notify the rest of the app
+      // 3. Update state from the API response
+      final updatedUser = User.fromJson(response);
       currentUserNotifier.value = updatedUser;
 
       return Result(success: true);
-    } catch (e) {
-      final errorMessage = e.toString().replaceFirst('Exception: ', '');
-      debugPrint('Profile Update Error: $e');
 
-      // Check for the specific FPL Team ID conflict code returned from the backend
-      if (errorMessage == 'FPL_TEAM_ID_EXISTS') {
+    } catch (e) {
+      // Ensure the fix for the Null-to-String cast is also applied in _post
+      final errorMessage = e.toString().replaceFirst('Exception: ', '');
+      debugPrint('FPL Team ID Update Error: $e');
+
+      // Handle the specific FPL Team ID conflict error returned by the server
+      if (errorMessage.contains('FPL Team ID is already in use by another account.') ||
+          errorMessage == 'FPL_TEAM_ID_EXISTS') { // Handle both server response and dev-mode response
         return Result(
           success: false,
           message: 'FPL_TEAM_ID_EXISTS',
         );
       }
 
-      // Handle other generic errors
+      // Handle other general errors
+      return Result(
+        success: false,
+        message: 'Failed to update FPL Team ID: $errorMessage',
+      );
+    }
+  }
+
+  // 🔑 CRITICAL FIX: Robust implementation of updateUser
+  Future<Result> updateUser(User updatedUserFields) async {
+    final currentUser = currentUserNotifier.value;
+    if (currentUser == null) {
+      return Result(success: false, message: 'User not authenticated.');
+    }
+
+    try {
+      // 1. Prepare the payload (only send fields that have changed and validate client-side)
+      final Map<String, dynamic> body = {};
+
+      // 🔑 Name Logic
+      // Trim the new name for storage and comparison
+      final newName = updatedUserFields.name.trim();
+      if (newName != currentUser.name) {
+        if (newName.isEmpty) {
+          return Result(success: false, message: 'Name cannot be empty.');
+        }
+        body['name'] = newName;
+      }
+
+      // 🔑 FPL ID Logic
+      // Apply trim here, as input from the UI can contain whitespace.
+      final newFplIdInputTrimmed = updatedUserFields.fpl_team_id?.trim();
+
+      // We compare the TRIMMED input to the current (already clean) value.
+      if (newFplIdInputTrimmed != currentUser.fpl_team_id) {
+        // Send null if the new FPL ID is null or empty string (to clear it)
+        // We use the trimmed input for this check.
+        final fplIdForPayload = (newFplIdInputTrimmed == null || newFplIdInputTrimmed.isEmpty)
+            ? null
+            : newFplIdInputTrimmed;
+
+        // The server will perform its own trim, but sending a clean value from the client
+        // is always the safer and more efficient approach.
+        body['fplTeamID'] = fplIdForPayload;
+      }
+
+      // 🔑 Check: Prevent unnecessary API call if no changes were made
+      if (body.isEmpty) {
+        return Result(success: true, message: 'No changes detected.');
+      }
+
+      // 2. Make the authenticated POST request
+      final response = await _post(
+        '/api/profile/update',
+        body,
+        token: currentUser.token,
+      );
+
+      // 3. Update state from the API response (FIX for stale data)
+      final updatedUser = User.fromJson(response);
+      currentUserNotifier.value = updatedUser;
+
+      return Result(success: true, message: 'Profile updated successfully.');
+
+    } catch (e) {
+      // ... (Error handling remains the same) ...
+      final errorMessage = e.toString().replaceFirst('Exception: ', '');
+      //debugPrint('Profile Update Error: $e');
+
+      if (errorMessage.contains('409')) {
+        return Result(
+          success: false,
+          message: 'FPL Team ID is already in use by another account.',
+        );
+      }
+      if (errorMessage.contains('401')) {
+        return Result(
+          success: false,
+          message: 'Session Expired. Please log in again.',
+        );
+      }
+      if (errorMessage.contains('Name cannot be empty')) {
+        return Result(
+          success: false,
+          message: 'Name cannot be empty.',
+        );
+      }
+
       return Result(
         success: false,
         message: 'Failed to update profile: $errorMessage',
@@ -201,7 +262,6 @@ class AuthService {
     }
   }
 
-  // NEW METHOD: Change Password
   Future<void> changePassword({
     required String currentPassword,
     required String newPassword,
@@ -219,21 +279,13 @@ class AuthService {
       },
       token: user.token,
     );
-
-    // Password change is successful (no need to update user object, as token is unchanged)
   }
 
-  // ⚡ ACTUAL IMPLEMENTATION: Now uses Google Sign-In and calls the backend
   Future<User?> signInWithGoogle() async {
-    // ----------------------------------------------------
-    // 1. Initialize Google Sign-In
     final GoogleSignIn googleSignIn = GoogleSignIn();
-
-    // 2. Perform sign-in and get authentication details
     final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
 
     if (googleUser == null) {
-      // User cancelled the sign-in process
       throw Exception('Google Sign-In cancelled by user.');
     }
 
@@ -244,10 +296,7 @@ class AuthService {
       throw Exception('Failed to retrieve Google ID Token.');
     }
 
-    // ----------------------------------------------------
-
     try {
-      // 3. Send ID token to your backend via a new endpoint
       final response = await _post(
         '/api/auth/google',
         {
@@ -255,7 +304,6 @@ class AuthService {
         },
       );
 
-      // 4. Backend returns User object + JWT
       final user = User.fromJson(response);
       currentUserNotifier.value = user;
 
